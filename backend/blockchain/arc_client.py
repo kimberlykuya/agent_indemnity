@@ -9,6 +9,11 @@ balance-fetch helper so Sprint 1 proof remains accessible.
 
 import os
 import logging
+from pathlib import Path
+from dotenv import load_dotenv
+
+env_path = Path(__file__).resolve().parent.parent.parent / '.env'
+load_dotenv(dotenv_path=env_path, override=True)
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +21,7 @@ ARC_RPC_URL            = os.getenv("ARC_RPC_URL",            "https://rpc.arc.ne
 ARC_CHAIN_ID           = int(os.getenv("ARC_CHAIN_ID", "5042002"))
 PERFORMANCE_BOND_ADDR  = os.getenv("PERFORMANCE_BOND_ADDRESS", "")
 USDC_CONTRACT_ADDR     = os.getenv("USDC_CONTRACT_ADDRESS",    "")
+DEPLOYER_PRIVATE_KEY   = os.getenv("DEPLOYER_PRIVATE_KEY",     "")
 
 
 def get_web3():
