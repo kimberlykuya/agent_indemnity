@@ -1,0 +1,29 @@
+{
+  "name": "agent_indemnity",
+  "version": "1.0.0",
+  "description": "**Agent Indemnity** instruments deployed AI agents with a USDC-backed performance bond on the Arc network.",
+  "main": "hardhat.config.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kimberlykuya/agent_indemnity.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/kimberlykuya/agent_indemnity/issues"
+  },
+  "homepage": "https://github.com/kimberlykuya/agent_indemnity#readme",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^7.0.0",
+    "hardhat": "^3.4.1"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.6.1",
+    "dotenv": "^17.4.2"
+  }
+}
