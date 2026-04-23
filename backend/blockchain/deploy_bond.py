@@ -15,6 +15,7 @@ PRIVATE_KEY = os.environ["DEPLOYER_PRIVATE_KEY"]
 AGENT_WALLET_ADDRESS = os.environ["AGENT_WALLET_ADDRESS"]
 USDC_CONTRACT_ADDRESS = os.environ["USDC_CONTRACT_ADDRESS"]
 
+
 CONTRACT_PATH = (
     Path(__file__).resolve().parent.parent / "contracts" / "PerformanceBond.sol"
 )
@@ -75,9 +76,9 @@ def main() -> None:
     print(f"Deployment tx hash: {tx_hash.hex()}")
 
     receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-    print(f"Contract deployed at: {receipt.contractAddress}") # type: ignore
+    print(f"Contract deployed at: {receipt.contractAddress}")  # type: ignore
 
-    env_line = f"PERFORMANCE_BOND_ADDRESS={receipt.contractAddress}" # type: ignore
+    env_line = f"PERFORMANCE_BOND_ADDRESS={receipt.contractAddress}"  # type: ignore
     print(env_line)
 
 
