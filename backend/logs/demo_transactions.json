@@ -1,7 +1,7 @@
 [
   {
     "reply": "I'm sorry, I'm unable to process your request right now. Please try again.",
-    "model": "gemini-2.5-pro-preview-03-25",
+    "model": "gemini-3.1-pro-preview",
     "route_category": "fallback_complex",
     "route_confidence": 0.5,
     "price_usdc": 0.01,
@@ -14,7 +14,7 @@
   },
   {
     "reply": "I'm sorry, I'm unable to process your request right now. Please try again.",
-    "model": "gemini-2.5-pro-preview-03-25",
+    "model": "gemini-3.1-pro-preview",
     "route_category": "fallback_complex",
     "route_confidence": 0.5,
     "price_usdc": 0.01,
@@ -27,7 +27,7 @@
   },
   {
     "reply": "I'm sorry, I'm unable to process your request right now. Please try again.",
-    "model": "gemini-2.5-pro-preview-03-25",
+    "model": "gemini-3.1-pro-preview",
     "route_category": "fallback_complex",
     "route_confidence": 0.5,
     "price_usdc": 0.01,
@@ -40,7 +40,7 @@
   },
   {
     "reply": "I'm sorry, I'm unable to process your request right now. Please try again.",
-    "model": "gemini-2.5-pro-preview-03-25",
+    "model": "gemini-3.1-pro-preview",
     "route_category": "fallback_complex",
     "route_confidence": 0.5,
     "price_usdc": 0.01,
@@ -105,7 +105,7 @@
   },
   {
     "reply": "I'm sorry, I'm unable to process your request right now. Please try again.",
-    "model": "gemini-2.5-pro-preview-03-25",
+    "model": "gemini-3.1-pro-preview",
     "route_category": "fallback_complex",
     "route_confidence": 0.5,
     "price_usdc": 0.01,
@@ -118,7 +118,7 @@
   },
   {
     "reply": "I'm sorry, I'm unable to process your request right now. Please try again.",
-    "model": "gemini-2.5-pro-preview-03-25",
+    "model": "gemini-3.1-pro-preview",
     "route_category": "fallback_complex",
     "route_confidence": 0.5,
     "price_usdc": 0.01,

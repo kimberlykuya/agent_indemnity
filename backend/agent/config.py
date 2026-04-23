@@ -55,8 +55,8 @@ FEATHERLESS_API_KEY  = os.getenv("FEATHERLESS_API_KEY", "")
 FEATHERLESS_GENERAL_MODEL = os.getenv("FEATHERLESS_GENERAL_MODEL", "mistralai/Mistral-7B-Instruct-v0.3")
 FEATHERLESS_TECH_MODEL    = os.getenv("FEATHERLESS_TECH_MODEL",    "mistralai/Mistral-7B-Instruct-v0.3")
 FEATHERLESS_LEGAL_MODEL   = os.getenv("FEATHERLESS_LEGAL_MODEL",   "mistralai/Mistral-7B-Instruct-v0.3")
-GEMINI_ROUTER_MODEL   = os.getenv("GEMINI_ROUTER_MODEL",   "gemini-2.5-flash-preview-04-17")
-GEMINI_FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-2.5-pro-preview-03-25")
+GEMINI_ROUTER_MODEL   = os.getenv("GEMINI_ROUTER_MODEL",   "gemini-3-flash-preview")
+GEMINI_FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-3.1-pro-preview")
 
 # Route → model ID lookup
 MODEL_MAP: dict[str, str] = {
