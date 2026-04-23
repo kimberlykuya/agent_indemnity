@@ -1,6 +1,6 @@
-# AgentIndemnity
+# Agent Indemnity
 
-**AgentIndemnity** instruments deployed AI agents with a USDC-backed performance bond on the Arc network. 
+**Agent Indemnity** instruments deployed AI agents with a USDC-backed performance bond on the Arc network. 
 
 Rather than traditional insurance, it acts as a **programmable performance bond** with automated slashing. Every outbound agent action incurs a sub-cent usage charge authorized via Circle Gateway Nanopayments and settled on Arc. If an agent behaves anomalously (e.g., hallucination, unauthorized action), a configurable trigger automatically slashes the bond and releases USDC directly to the affected party—ensuring instant accountability with no claims process or human adjudication delay.
 
