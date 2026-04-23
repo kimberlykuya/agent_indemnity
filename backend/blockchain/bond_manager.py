@@ -1,32 +1,56 @@
-from .arc_client import account, contract, wallet_address, w3
+"""
+blockchain/bond_manager.py
+---------------------------
+Admin interaction layer for the PerformanceBond contract.
 
+Sprint 2: optional minimal helpers.
+Sprint 3: slash_bond() will be wired to the FastAPI POST /bond/slash endpoint.
+"""
 
-def stake_bond(amount_usdc: float) -> str:
-    amount_6dp = int(amount_usdc * 10**6)
+import logging
 
-    nonce = w3.eth.get_transaction_count(wallet_address)
-    gas_price = w3.eth.gas_price
+from blockchain.arc_client import PERFORMANCE_BOND_ADDR, get_web3
 
-    tx = contract.functions.stakeBond(amount_6dp).build_transaction(
-        {
-            "from": wallet_address,
-            "nonce": nonce,
-            "gas": 200000,
-            "gasPrice": gas_price,
-        }
-    )
+logger = logging.getLogger(__name__)
 
-    signed_tx = w3.eth.account.sign_transaction(tx, private_key=account.key)
-    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-    receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-
-    return receipt.transactionHash.hex()
+# Minimal ABI — only the functions needed for Sprint 2 reads
+_BOND_ABI = [
+    {
+        "inputs": [],
+        "name": "getBondBalance",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function",
+    }
+]
 
 
 def get_bond_balance() -> float:
-    raw_balance = contract.functions.getBondBalance().call()
-    return raw_balance / 10**6
+    """Return on-chain bond balance in USDC (6 decimal places → float).
+
+    Returns 0.0 and logs a warning if the contract is unreachable.
+    """
+    if not PERFORMANCE_BOND_ADDR:
+        logger.warning({}, "PERFORMANCE_BOND_ADDRESS not set — returning 0.0")
+        return 0.0
+    try:
+        w3 = get_web3()
+        contract = w3.eth.contract(
+            address=w3.to_checksum_address(PERFORMANCE_BOND_ADDR),
+            abi=_BOND_ABI,
+        )
+        raw: int = contract.functions.getBondBalance().call()
+        return raw / 1_000_000  # USDC has 6 decimal places
+    except Exception as exc:
+        logger.warning({"error": str(exc)}, "get_bond_balance failed")
+        return 0.0
 
 
-if __name__ == "__main__":
-    print("Current bond balance:", get_bond_balance())
+def slash_bond(victim_address: str, payout_amount_usdc: float) -> str:
+    """Placeholder — full implementation in Sprint 3.
+
+    Returns a dummy tx hash so the demo can proceed without chain access.
+    """
+    logger.info({"victim": victim_address, "amount": payout_amount_usdc},
+                "slash_bond called — Sprint 3 will execute on-chain")
+    return "0x0000000000000000000000000000000000000000000000000000000000000000"
