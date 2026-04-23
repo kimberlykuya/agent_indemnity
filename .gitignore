@@ -3,3 +3,4 @@ node_modules
 dev-controlled-projects/output
 artifacts/
 cache/
+__pycache__/
