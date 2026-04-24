@@ -71,7 +71,7 @@ export default function CustomerDemo() {
         </main>
         
         <footer className="text-center text-xs text-neutral-600 mt-8">
-          <p>Demo environment • Micro-charges simulate live routing costs</p>
+          <p>Demo environment • Requests are challenge-priced, wallet-bound, and only answered after payment proof.</p>
         </footer>
       </div>
     </div>

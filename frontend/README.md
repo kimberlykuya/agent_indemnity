@@ -4,7 +4,7 @@ This frontend is a Next.js dashboard for the Agent Indemnity backend.
 
 It provides two main views:
 - `/` shows the compliance dashboard with bond balance, transaction feed, route distribution, bond chart, and margin table
-- `/demo` shows the customer chat view with live slash / payout alerts
+- `/demo` shows the customer chat view with wallet entry, payment challenge, paid reply, and live slash / payout alerts
 
 ## What It Consumes
 
@@ -41,5 +41,6 @@ The frontend currently uses:
 ## Notes
 
 - The frontend reflects backend truth; it does not execute contract transactions directly
-- Manual slash actions in the UI still depend on the backend signer and configured victim wallet behavior
+- Demo chat requests are wallet-bound and use a `402` challenge / retry flow on the same `POST /agent/chat` endpoint
+- Manual slash actions in the UI are now an admin/debug path and default to the latest paid beneficiary wallet unless overridden
 - If the backend is not running, dashboard bootstrapping and live updates will fail

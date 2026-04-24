@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 PublicRouteCategory = Literal["general", "technical", "legal", "fallback"]
 SettlementStatus = Literal["authorized", "settled", "failed"]
 EventName = Literal["request_paid", "bond_slashed", "bond_topped_up", "anomaly_flagged"]
+AnomalySignal = Literal["none", "rule", "embedding", "rule+embedding"]
+SlashMode = Literal["none", "auto", "manual"]
 
 
 class APIModel(BaseModel):
@@ -38,9 +40,23 @@ class HealthResponse(APIModel):
     status: Literal["ok"]
 
 
+class PaymentProof(APIModel):
+    proof_token: str
+    payer_wallet_address: str
+    facilitator_tx_ref: str
+
+    @field_validator("proof_token", "payer_wallet_address", "facilitator_tx_ref")
+    @classmethod
+    def validate_non_empty_fields(cls, value: str, info) -> str:
+        return _require_non_empty(value, info.field_name)
+
+
 class ChatRequest(APIModel):
     message: str = Field(..., description="Customer message")
     user_id: str = Field(..., description="Caller identifier")
+    user_wallet_address: str = Field(..., description="Payer and beneficiary wallet for this request")
+    payment_challenge_token: str | None = Field(default=None, description="Challenge token from the prior 402 response")
+    payment_proof: PaymentProof | None = Field(default=None, description="x402/Circle proof payload for the retry")
 
     @field_validator("message")
     @classmethod
@@ -51,6 +67,48 @@ class ChatRequest(APIModel):
     @classmethod
     def validate_user_id(cls, value: str) -> str:
         return _require_non_empty(value, "user_id")
+
+    @field_validator("user_wallet_address")
+    @classmethod
+    def validate_user_wallet_address(cls, value: str) -> str:
+        return _require_non_empty(value, "user_wallet_address")
+
+    @field_validator("payment_challenge_token")
+    @classmethod
+    def validate_optional_challenge_token(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _require_non_empty(value, "payment_challenge_token")
+
+
+class PaymentChallengeResponse(APIModel):
+    kind: Literal["payment_required"] = "payment_required"
+    message: str
+    route_category: PublicRouteCategory
+    route_confidence: float | None = None
+    price_usdc: float
+    payment_challenge_token: str
+    expires_at: datetime
+    payment_network: str
+    facilitator_url: str | None = None
+    payment_instructions: dict[str, Any]
+
+    @field_validator("message", "payment_challenge_token", "payment_network")
+    @classmethod
+    def validate_non_empty_fields(cls, value: str, info) -> str:
+        return _require_non_empty(value, info.field_name)
+
+    @field_validator("facilitator_url")
+    @classmethod
+    def validate_optional_facilitator_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _require_non_empty(value, "facilitator_url")
+
+    @field_validator("price_usdc")
+    @classmethod
+    def validate_price(cls, value: float) -> float:
+        return _require_non_negative_finite(value, "price_usdc")
 
 
 class ChatResponse(APIModel):
@@ -68,9 +126,13 @@ class ChatResponse(APIModel):
     slash_tx_hash: str | None = None
     slash_payout: float | None = None
     slash_victim_address: str | None = None
+    payer_wallet_address: str
+    beneficiary_wallet_address: str
+    anomaly_signal: AnomalySignal = "none"
+    slash_mode: SlashMode = "none"
     timestamp: datetime
 
-    @field_validator("reply", "model", "payment_ref")
+    @field_validator("reply", "model", "payment_ref", "payer_wallet_address", "beneficiary_wallet_address")
     @classmethod
     def validate_non_empty_fields(cls, value: str, info) -> str:
         return _require_non_empty(value, info.field_name)
@@ -121,12 +183,14 @@ class SlashResponse(APIModel):
     tx_hash: str
     payout: float
     new_balance: float
+    beneficiary_wallet_address: str
+    slash_mode: Literal["auto", "manual"]
     timestamp: datetime
 
-    @field_validator("tx_hash")
+    @field_validator("tx_hash", "beneficiary_wallet_address")
     @classmethod
-    def validate_tx_hash(cls, value: str) -> str:
-        return _require_non_empty(value, "tx_hash")
+    def validate_non_empty_fields(cls, value: str, info) -> str:
+        return _require_non_empty(value, info.field_name)
 
     @field_validator("payout", "new_balance")
     @classmethod
@@ -162,6 +226,11 @@ class TransactionRecord(APIModel):
     tx_hash: str | None = None
     victim_address: str | None = None
     flagged: bool | None = None
+    anomaly_reason: str | None = None
+    anomaly_signal: AnomalySignal | None = None
+    slash_mode: SlashMode | None = None
+    payer_wallet_address: str | None = None
+    beneficiary_wallet_address: str | None = None
 
     @field_validator("amount")
     @classmethod
@@ -209,3 +278,6 @@ class AnomalyMetricsResponse(APIModel):
 class WebSocketEvent(APIModel):
     event: EventName
     data: dict[str, Any]
+
+
+ChatRequest.model_rebuild()

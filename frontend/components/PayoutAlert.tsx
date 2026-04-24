@@ -19,7 +19,10 @@ export function PayoutAlert() {
       <div>
         <h4 className="text-emerald-400 font-medium text-sm">Consumer Protection Payout Initiated</h4>
         <p className="text-neutral-400 text-sm mt-1">
-          A real payout of ${latestSlash.amount.toFixed(2)} USDC was recorded on-chain for this bond slash.
+          A {latestSlash.slash_mode === "manual" ? "manual" : "runtime"} payout of ${latestSlash.amount.toFixed(2)} USDC was recorded on-chain for beneficiary{" "}
+          {latestSlash.beneficiary_wallet_address
+            ? `${latestSlash.beneficiary_wallet_address.slice(0, 8)}...${latestSlash.beneficiary_wallet_address.slice(-6)}`
+            : "wallet"}.
         </p>
         <a 
           href={getArcExplorerTxUrl(latestSlash.tx_hash)}

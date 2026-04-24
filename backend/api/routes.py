@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import JSONResponse
 
 from .schemas import (
     AnomalyMetricsResponse,
@@ -25,9 +26,9 @@ except ImportError:  # pragma: no cover - compatibility fallback
     from blockchain.bond_manager import get_bond_balance, slash_bond
 
 try:
-    from backend.services.chat_service import ChatServiceError
+    from backend.services.chat_service import ChatServiceError, PaymentRequiredError
 except ImportError:  # pragma: no cover - compatibility fallback
-    from services.chat_service import ChatServiceError
+    from services.chat_service import ChatServiceError, PaymentRequiredError
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,8 @@ class BondOperationError(RuntimeError):
 
 def _http_error(status_code: int, code: str, message: str) -> HTTPException:
     return HTTPException(status_code=status_code, detail={"code": code, "message": message})
+
+
 def _utcnow(request: Request) -> datetime:
     now_factory = getattr(request.app.state, "utcnow", None)
     if callable(now_factory):
@@ -62,7 +65,12 @@ async def post_agent_chat(request: Request, payload: ChatRequest) -> ChatRespons
             request.app.state.chat_service.process_message,
             message=payload.message,
             user_id=payload.user_id,
+            user_wallet_address=payload.user_wallet_address,
+            payment_challenge_token=payload.payment_challenge_token,
+            payment_proof=payload.payment_proof.model_dump() if payload.payment_proof else None,
         )
+    except PaymentRequiredError as exc:
+        return JSONResponse(status_code=402, content=exc.payload.model_dump(mode="json"))
     except ChatServiceError as exc:
         logger.exception("Chat service failed")
         raise _http_error(exc.status_code, exc.code, exc.message) from exc
@@ -80,6 +88,12 @@ async def post_agent_chat(request: Request, payload: ChatRequest) -> ChatRespons
         status=response.payment_status,
         payment_ref=response.payment_ref,
         flagged=response.flagged,
+        anomaly_reason=response.anomaly_reason,
+        anomaly_signal=response.anomaly_signal,
+        slash_mode=response.slash_mode,
+        payer_wallet_address=response.payer_wallet_address,
+        beneficiary_wallet_address=response.beneficiary_wallet_address,
+        victim_address=response.beneficiary_wallet_address,
     )
     request.app.state.event_store.add_event(event.model_dump())
 
@@ -92,6 +106,11 @@ async def post_agent_chat(request: Request, payload: ChatRequest) -> ChatRespons
             "payment_status": response.payment_status,
             "payment_ref": response.payment_ref,
             "flagged": response.flagged,
+            "anomaly_reason": response.anomaly_reason,
+            "anomaly_signal": response.anomaly_signal,
+            "slash_mode": response.slash_mode,
+            "payer_wallet_address": response.payer_wallet_address,
+            "beneficiary_wallet_address": response.beneficiary_wallet_address,
             "timestamp": response.timestamp,
             "bond_balance": response.bond_balance,
         },
@@ -103,6 +122,11 @@ async def post_agent_chat(request: Request, payload: ChatRequest) -> ChatRespons
             {
                 "route_category": response.route_category,
                 "payment_ref": response.payment_ref,
+                "anomaly_reason": response.anomaly_reason,
+                "anomaly_signal": response.anomaly_signal,
+                "slash_mode": response.slash_mode,
+                "payer_wallet_address": response.payer_wallet_address,
+                "beneficiary_wallet_address": response.beneficiary_wallet_address,
                 "timestamp": response.timestamp,
             },
         )
@@ -114,6 +138,8 @@ async def post_agent_chat(request: Request, payload: ChatRequest) -> ChatRespons
                     tx_hash=response.slash_tx_hash,
                     payout=response.slash_payout,
                     new_balance=response.bond_balance,
+                    beneficiary_wallet_address=response.beneficiary_wallet_address,
+                    slash_mode=response.slash_mode if response.slash_mode in {"auto", "manual"} else "auto",
                     timestamp=response.timestamp,
                 ),
             )
@@ -134,6 +160,8 @@ def _perform_bond_slash(victim_address: str, payout_amount: float, timestamp: da
         tx_hash=tx_hash,
         payout=payout_amount,
         new_balance=new_balance,
+        beneficiary_wallet_address=victim_address,
+        slash_mode="manual",
         timestamp=timestamp,
     )
 
@@ -151,6 +179,8 @@ async def _emit_bond_slashed_event(
         bond_balance_after=response.new_balance,
         tx_hash=response.tx_hash,
         victim_address=victim_address,
+        beneficiary_wallet_address=response.beneficiary_wallet_address,
+        slash_mode=response.slash_mode,
     )
     request.app.state.event_store.add_event(event.model_dump())
 
@@ -161,6 +191,8 @@ async def _emit_bond_slashed_event(
             "new_balance": response.new_balance,
             "tx_hash": response.tx_hash,
             "victim_address": victim_address,
+            "beneficiary_wallet_address": response.beneficiary_wallet_address,
+            "slash_mode": response.slash_mode,
             "timestamp": response.timestamp,
         },
     )

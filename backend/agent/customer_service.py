@@ -1,19 +1,21 @@
 """
 agent/customer_service.py
 --------------------------
-Orchestrates the full request lifecycle for one customer message.
+Core request orchestration for Agent Indemnity.
 
-Flow per request:
-  1. Start timer
-  2. route_message     → route + confidence
-  3. get_price         → price_usdc
-  4. create_payment_record
-  5. call appropriate provider
-  6. detect_anomaly
-  7. Calculate latency, compose result
-  8. Append to log
-  9. Return result
+The live API path is:
+  1. Quote the request (route + price)
+  2. Require an x402-style payment challenge
+  3. Generate the reply only after payment proof verifies
+  4. Run hybrid anomaly detection
+  5. Auto-slash deterministically when enabled
+
+`handle_request()` remains as a dev/test convenience wrapper that bypasses the
+challenge step with a synthetic payment reference. The FastAPI path does not use
+that helper.
 """
+
+from __future__ import annotations
 
 import json
 import logging
@@ -46,16 +48,15 @@ except ImportError:  # pragma: no cover - compatibility fallback
 logger = logging.getLogger(__name__)
 
 _LOG_FILE = pathlib.Path(__file__).parent.parent / "logs" / "demo_transactions.json"
-
-# Map route → (system_prompt, model_id)
-_ROUTE_CONFIG: dict[str, tuple[str, str]] = {
-    config.GENERAL:   (GENERAL_SYSTEM_PROMPT,    config.FEATHERLESS_GENERAL_MODEL),
-    config.TECHNICAL: (TECHNICAL_SYSTEM_PROMPT,  config.FEATHERLESS_TECH_MODEL),
-    config.LEGAL_RISK:(LEGAL_RISK_SYSTEM_PROMPT, config.FEATHERLESS_LEGAL_MODEL),
-}
 _FLAGGED_REFUSAL_REPLY = (
     "I'm sorry, I cannot process that request. This interaction has been flagged and reviewed."
 )
+
+_ROUTE_CONFIG: dict[str, tuple[str, str]] = {
+    config.GENERAL: (GENERAL_SYSTEM_PROMPT, config.FEATHERLESS_GENERAL_MODEL),
+    config.TECHNICAL: (TECHNICAL_SYSTEM_PROMPT, config.FEATHERLESS_TECH_MODEL),
+    config.LEGAL_RISK: (LEGAL_RISK_SYSTEM_PROMPT, config.FEATHERLESS_LEGAL_MODEL),
+}
 
 
 def _env_positive_float(name: str, default: float) -> float:
@@ -66,184 +67,25 @@ def _env_positive_float(name: str, default: float) -> float:
         value = float(raw)
     except ValueError:
         return default
-    if value <= 0:
+    return value if value > 0 else default
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
         return default
-    return value
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _safe_float(value: object, default: float) -> float:
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        return default
-    if parsed <= 0:
-        return default
-    return parsed
-
-
-def _action_controller_context(
-    *,
-    user_id: str,
-    message: str,
-    reply: str,
-    route: str,
-    price: float,
-    flagged: bool,
-    anomaly_reason: str | None,
-) -> dict:
-    victim_address = (
-        os.getenv("AUTO_SLASH_VICTIM_ADDRESS")
-        or os.getenv("VICTIM_WALLET_ADDRESS")
-        or ""
-    )
-    suggested_slash_payout = _env_positive_float(
-        "AUTO_SLASH_PAYOUT_USDC",
-        _env_positive_float("SLASH_PAYOUT_USDC", 1.0),
-    )
-    min_slash_payout = _env_positive_float("AUTO_SLASH_MIN_PAYOUT_USDC", 0.01)
-    try:
-        available_bond_balance = max(float(get_bond_balance()), 0.0)
-    except Exception:
-        available_bond_balance = None
-
+def quote_request(message: str) -> dict[str, float | str | None]:
+    route_decision = route_message(message)
+    route = route_decision["route"]
+    price = get_price(route)
     return {
-        "user_id": user_id,
-        "message": message,
-        "reply": reply,
         "route_category": route,
+        "route_confidence": route_decision.get("confidence"),
         "price_usdc": price,
-        "flagged": flagged,
-        "anomaly_reason": anomaly_reason,
-        "suggested_actions": {
-            "settle_premium_amount_usdc": price,
-            "victim_address": victim_address,
-            "suggested_slash_payout_usdc": suggested_slash_payout,
-            "min_slash_payout_usdc": min_slash_payout,
-            "available_bond_balance_usdc": available_bond_balance,
-        },
     }
-
-
-def _run_ai_actions(
-    *,
-    user_id: str,
-    message: str,
-    reply: str,
-    route: str,
-    price: float,
-    flagged: bool,
-    anomaly_reason: str | None,
-    payment_ref: str | None,
-    payment_status: str,
-) -> dict:
-    result = {
-        "payment_ref": payment_ref,
-        "payment_status": payment_status,
-        "payment_error": None,
-        "slash_executed": False,
-        "slash_tx_hash": None,
-        "slash_payout": None,
-        "slash_victim_address": None,
-    }
-
-    try:
-        calls = call_gemini_action_controller(
-            _action_controller_context(
-                user_id=user_id,
-                message=message,
-                reply=reply,
-                route=route,
-                price=price,
-                flagged=flagged,
-                anomaly_reason=anomaly_reason,
-            )
-        )
-    except ModelClientError as exc:
-        logger.warning("Gemini action controller failed; no action tools will be executed: %s", exc)
-        calls = []
-
-    settled_by_ai = False
-    victim_address = (
-        os.getenv("AUTO_SLASH_VICTIM_ADDRESS")
-        or os.getenv("VICTIM_WALLET_ADDRESS")
-        or ""
-    )
-    default_payout = _env_positive_float(
-        "AUTO_SLASH_PAYOUT_USDC",
-        _env_positive_float("SLASH_PAYOUT_USDC", 1.0),
-    )
-    min_payout = _env_positive_float("AUTO_SLASH_MIN_PAYOUT_USDC", 0.01)
-
-    for call in calls:
-        name = str(call.get("name", "")).strip()
-        args = call.get("args", {})
-        if not isinstance(args, dict):
-            args = {}
-
-        if name == "settle_premium":
-            if settled_by_ai:
-                logger.warning("Ignoring duplicate AI settle_premium tool call")
-                continue
-            amount = _safe_float(args.get("amount_usdc"), price)
-            try:
-                result["payment_ref"] = pay_premium(amount)
-                result["payment_status"] = "settled"
-                settled_by_ai = True
-            except Exception as exc:
-                logger.error(
-                    "AI-triggered premium settlement failed: route=%s amount=%s error=%s",
-                    route,
-                    amount,
-                    exc,
-                )
-                result["payment_status"] = "payment_failed"
-                result["payment_error"] = str(exc)
-        elif name == "slash_performance_bond":
-            if not flagged:
-                logger.warning("Ignoring AI slash tool call because exchange is not flagged")
-                continue
-            if result["slash_executed"]:
-                logger.warning("Ignoring duplicate AI slash_performance_bond tool call")
-                continue
-            payout = _safe_float(args.get("payout_amount_usdc"), default_payout)
-            slash_victim = str(args.get("victim_address") or victim_address).strip()
-            if not slash_victim:
-                logger.warning("Ignoring AI slash tool call because victim address is missing")
-                continue
-            try:
-                available_bond = max(float(get_bond_balance()), 0.0)
-            except Exception as exc:
-                logger.warning("Unable to read bond balance before AI slash: %s", exc)
-                available_bond = 0.0
-            payout = min(payout, available_bond)
-            if payout < min_payout:
-                logger.info(
-                    "Skipping AI slash call: payout below minimum threshold "
-                    "(payout=%s min=%s available=%s)",
-                    payout,
-                    min_payout,
-                    available_bond,
-                )
-                continue
-            try:
-                result["slash_tx_hash"] = slash_bond(slash_victim, payout)
-                result["slash_payout"] = payout
-                result["slash_victim_address"] = slash_victim
-                result["slash_executed"] = True
-            except Exception as exc:
-                logger.error(
-                    "AI-triggered slash failed: victim=%s amount=%s error=%s",
-                    slash_victim,
-                    payout,
-                    exc,
-                )
-
-    if not settled_by_ai:
-        logger.warning("AI controller did not execute settle_premium; request remains unsettled")
-        result["payment_status"] = "payment_failed"
-        result["payment_error"] = result["payment_error"] or "Premium settlement was not executed"
-
-    return result
 
 
 def _generate_reply(route: str, message: str) -> tuple[str, str]:
@@ -277,71 +119,78 @@ def _append_to_log(record: dict) -> None:
     _LOG_FILE.write_text(json.dumps(existing, indent=2))
 
 
-def handle_request(message: str, user_id: str = "demo-user") -> dict:
-    """Process one customer message end-to-end.
-
-    Returns a dict matching the agreed response schema:
-        reply, model, route_category, route_confidence, price_usdc,
-        payment_status, flagged, anomaly_reason, latency_ms
-    """
+def handle_paid_request(
+    *,
+    message: str,
+    user_id: str,
+    user_wallet_address: str,
+    route: str,
+    route_confidence: float | None,
+    price: float,
+    payment_ref: str,
+) -> dict:
+    """Process one paid customer message end-to-end."""
     t0 = time.monotonic()
-
-    # 1. Route
-    route_decision = route_message(message)
-    route = route_decision["route"]
-
-    # 2. Price
-    price = get_price(route)
-
-    # 3. Payment record
     payment = create_payment_record(user_id, route, price)
-    payment_status = payment["payment_status"]
-    payment_ref = payment.get("payment_ref")
 
-    # 4. Generate reply
     try:
         reply, model_id = _generate_reply(route, message)
+        payment_status = "settled"
+        payment_error = None
     except ModelClientError as exc:
-        logger.error("Provider call failed: route=%s error=%s", route, exc)
-        reply      = "I'm sorry, I'm unable to process your request right now. Please try again."
-        model_id   = config.MODEL_MAP[route]
-        payment_status = "provider_error"
+        logger.error("Provider call failed after payment verification: route=%s error=%s", route, exc)
+        reply = "I'm sorry, I'm unable to process your request right now. Please try again."
+        model_id = config.MODEL_MAP[route]
+        payment_status = "failed"
+        payment_error = "Provider unavailable after payment verification"
 
-    # 5. Anomaly detection
     anomaly = detect_anomaly(message, reply, route)
     original_reply = reply
+    beneficiary_wallet_address = user_wallet_address
 
     if anomaly["flagged"]:
         reply = _FLAGGED_REFUSAL_REPLY
 
+    auto_slash_enabled = _env_flag("AUTO_SLASH_ON_FLAGGED", True)
+    slash_mode = "auto" if anomaly["flagged"] and auto_slash_enabled else "none"
     slash_executed = False
     slash_tx_hash = None
     slash_payout = None
     slash_victim_address = None
 
-    if payment_status != "provider_error":
-        action_result = _run_ai_actions(
-            user_id=user_id,
-            message=message,
-            reply=original_reply,
-            route=route,
-            price=price,
-            flagged=anomaly["flagged"],
-            anomaly_reason=anomaly["reason"],
-            payment_ref=payment_ref,
-            payment_status=payment_status,
+    if anomaly["flagged"] and auto_slash_enabled:
+        default_payout = _env_positive_float(
+            "AUTO_SLASH_PAYOUT_USDC",
+            _env_positive_float("SLASH_PAYOUT_USDC", 1.0),
         )
-        payment_ref = action_result["payment_ref"]
-        payment_status = action_result["payment_status"]
-        payment_error = action_result["payment_error"]
-        slash_executed = bool(action_result["slash_executed"])
-        slash_tx_hash = action_result["slash_tx_hash"]
-        slash_payout = action_result["slash_payout"]
-        slash_victim_address = action_result["slash_victim_address"]
-    else:
-        payment_error = None
+        min_payout = _env_positive_float("AUTO_SLASH_MIN_PAYOUT_USDC", 0.01)
+        try:
+            available_bond = max(float(get_bond_balance()), 0.0)
+        except Exception as exc:
+            logger.warning("Unable to read bond balance before auto slash: %s", exc)
+            available_bond = 0.0
+        payout = min(default_payout, available_bond)
+        if payout >= min_payout:
+            try:
+                slash_tx_hash = slash_bond(beneficiary_wallet_address, payout)
+                slash_payout = payout
+                slash_victim_address = beneficiary_wallet_address
+                slash_executed = True
+            except Exception as exc:
+                logger.error(
+                    "Automatic slash failed: beneficiary=%s amount=%s error=%s",
+                    beneficiary_wallet_address,
+                    payout,
+                    exc,
+                )
+        else:
+            logger.info(
+                "Skipping automatic slash: payout below threshold (payout=%s min=%s available=%s)",
+                payout,
+                min_payout,
+                available_bond,
+            )
 
-    # 6. Latency
     latency_ms = int((time.monotonic() - t0) * 1000)
 
     try:
@@ -350,47 +199,83 @@ def handle_request(message: str, user_id: str = "demo-user") -> dict:
         bond_balance_after = None
 
     result = {
-        "reply":            reply,
-        "model":            model_id,
-        "route_category":   route,
-        "route_confidence": route_decision["confidence"],
-        "price_usdc":       price,
-        "payment_status":   payment_status,
-        "payment_ref":      payment_ref,
-        "flagged":          anomaly["flagged"],
-        "anomaly_reason":   anomaly["reason"],
-        "payment_error":    payment_error,
-        "slash_executed":   slash_executed,
-        "slash_tx_hash":    slash_tx_hash,
-        "slash_payout":     slash_payout,
+        "reply": reply,
+        "model": model_id,
+        "route_category": route,
+        "route_confidence": route_confidence,
+        "price_usdc": price,
+        "payment_status": payment_status,
+        "payment_ref": payment_ref,
+        "payer_wallet_address": user_wallet_address,
+        "beneficiary_wallet_address": beneficiary_wallet_address,
+        "flagged": anomaly["flagged"],
+        "anomaly_reason": anomaly["reason"],
+        "anomaly_signal": anomaly["signal"],
+        "payment_error": payment_error,
+        "slash_mode": slash_mode,
+        "slash_executed": slash_executed,
+        "slash_tx_hash": slash_tx_hash,
+        "slash_payout": slash_payout,
         "slash_victim_address": slash_victim_address,
-        "latency_ms":       latency_ms,
+        "latency_ms": latency_ms,
+        "bond_balance_after": bond_balance_after,
+        "payment_record": payment,
     }
 
-    logger.info("Request handled: route=%s model=%s price=%s flagged=%s latency_ms=%d",
-                route, model_id, price, anomaly["flagged"], latency_ms)
+    logger.info(
+        "Paid request handled: route=%s model=%s price=%s flagged=%s signal=%s latency_ms=%d",
+        route,
+        model_id,
+        price,
+        anomaly["flagged"],
+        anomaly["signal"],
+        latency_ms,
+    )
 
     log_record = {
-        "timestamp":          datetime.now(timezone.utc).isoformat(),
-        "user_id":            user_id,
-        "message":            message,
-        "message_type":       "malicious" if anomaly["flagged"] else "normal",
-        "model_reply":        original_reply,
-        "returned_reply":     reply,
-        "route_category":     route,
-        "model_used":         model_id,
-        "price_usdc":         price,
-        "payment_status":     payment_status,
-        "anomaly_flagged":    anomaly["flagged"],
-        "anomaly_reason":     anomaly["reason"],
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "user_id": user_id,
+        "user_wallet_address": user_wallet_address,
+        "beneficiary_wallet_address": beneficiary_wallet_address,
+        "message": message,
+        "message_type": "malicious" if anomaly["flagged"] else "normal",
+        "model_reply": original_reply,
+        "returned_reply": reply,
+        "route_category": route,
+        "model_used": model_id,
+        "price_usdc": price,
+        "payment_status": payment_status,
+        "payment_ref": payment_ref,
+        "anomaly_flagged": anomaly["flagged"],
+        "anomaly_reason": anomaly["reason"],
+        "anomaly_signal": anomaly["signal"],
+        "slash_mode": slash_mode,
+        "slash_executed": slash_executed,
+        "slash_tx_hash": slash_tx_hash,
+        "slash_payout": slash_payout,
         "bond_balance_after": bond_balance_after,
-        "route_confidence":   route_decision["confidence"],
-        "payment_ref":        payment_ref,
-        "payment_error":      payment_error,
-        "slash_executed":     slash_executed,
-        "slash_tx_hash":      slash_tx_hash,
-        "slash_payout":       slash_payout,
-        "latency_ms":         latency_ms,
+        "route_confidence": route_confidence,
+        "payment_error": payment_error,
+        "latency_ms": latency_ms,
     }
     _append_to_log(log_record)
     return result
+
+
+def handle_request(
+    message: str,
+    user_id: str = "demo-user",
+    user_wallet_address: str = "0xDEMOUSER00000000000000000000000000000000",
+) -> dict:
+    """Compatibility wrapper for scripts/tests outside the x402 challenge flow."""
+    quote = quote_request(message)
+    payment_ref = f"dev-bypass:{int(time.time() * 1000)}"
+    return handle_paid_request(
+        message=message,
+        user_id=user_id,
+        user_wallet_address=user_wallet_address,
+        route=str(quote["route_category"]),
+        route_confidence=float(quote["route_confidence"] or 0.0),
+        price=float(quote["price_usdc"]),
+        payment_ref=payment_ref,
+    )

@@ -124,6 +124,12 @@ export function TxFeed() {
             const truncatedVictim = tx.victim_address
               ? `${tx.victim_address.slice(0, 8)}...${tx.victim_address.slice(-6)}`
               : "N/A";
+            const truncatedPayer = tx.payer_wallet_address
+              ? `${tx.payer_wallet_address.slice(0, 8)}...${tx.payer_wallet_address.slice(-6)}`
+              : "N/A";
+            const truncatedBeneficiary = tx.beneficiary_wallet_address
+              ? `${tx.beneficiary_wallet_address.slice(0, 8)}...${tx.beneficiary_wallet_address.slice(-6)}`
+              : truncatedVictim;
             const truncatedHash = tx.tx_hash ? `${tx.tx_hash.slice(0, 12)}...` : "N/A";
             const promptText = tx.prompt || "Not captured for this historical transaction.";
             const replyText = tx.reply || "Not captured for this historical transaction.";
@@ -155,8 +161,12 @@ export function TxFeed() {
                             <div className="text-neutral-300 text-xs font-mono">${tx.amount.toFixed(3)} USDC</div>
                           </div>
                           <div>
-                            <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Victim</div>
-                            <div className="text-neutral-300 text-xs font-mono">{truncatedVictim}</div>
+                            <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Beneficiary</div>
+                            <div className="text-neutral-300 text-xs font-mono">{truncatedBeneficiary}</div>
+                          </div>
+                          <div>
+                            <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Slash Mode</div>
+                            <div className="text-neutral-300 text-xs font-mono">{tx.slash_mode || "manual"}</div>
                           </div>
                           <div>
                             <div className="text-neutral-500 text-[10px] uppercase tracking-wider">TX Hash</div>
@@ -202,8 +212,16 @@ export function TxFeed() {
                           <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Status</div>
                           <div className="text-neutral-300 text-xs font-mono">{tx.status || "N/A"}</div>
                         </div>
+                        <div>
+                          <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Payer</div>
+                          <div className="text-neutral-300 text-xs font-mono">{truncatedPayer}</div>
+                        </div>
+                        <div>
+                          <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Beneficiary</div>
+                          <div className="text-neutral-300 text-xs font-mono">{truncatedBeneficiary}</div>
+                        </div>
                           <div>
-                            <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Arc Tx</div>
+                          <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Arc Tx</div>
                             <div className="text-neutral-300 text-xs font-mono">{truncatedPaymentRef}</div>
                           </div>
                           <div>
@@ -224,6 +242,18 @@ export function TxFeed() {
                           <div>
                             <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Anomaly</div>
                             <div className="text-neutral-300 text-xs font-mono">{anomalyReason}</div>
+                          </div>
+                        )}
+                        {tx.anomaly_signal && (
+                          <div>
+                            <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Signal</div>
+                            <div className="text-neutral-300 text-xs font-mono">{tx.anomaly_signal}</div>
+                          </div>
+                        )}
+                        {tx.slash_mode && (
+                          <div>
+                            <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Slash Mode</div>
+                            <div className="text-neutral-300 text-xs font-mono">{tx.slash_mode}</div>
                           </div>
                         )}
                         {hasVerifiableExplorerLink && explorerHash && (

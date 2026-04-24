@@ -69,6 +69,6 @@ async def check_anomaly(
     return AnomalyResult(
         flagged=True,
         anomaly_type=anomaly_type,
-        confidence=0.95,
+        confidence=float(result.get("confidence", 0.95)),
         slash_recommended=slash_recommended,
     )

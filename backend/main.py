@@ -15,6 +15,7 @@ try:
     from backend.services.chat_service import ChatService
     from backend.services.event_store import EventStore
     from backend.services.metrics_service import MetricsService
+    from backend.services.payment_gateway import PaymentGateway
 except ImportError:  # pragma: no cover - Railway root_directory="backend" fallback
     from agent import config
     from api.routes import router
@@ -22,6 +23,7 @@ except ImportError:  # pragma: no cover - Railway root_directory="backend" fallb
     from services.chat_service import ChatService
     from services.event_store import EventStore
     from services.metrics_service import MetricsService
+    from services.payment_gateway import PaymentGateway
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +35,8 @@ async def lifespan(app: FastAPI):
     event_store = EventStore()
     app.state.event_store = event_store
     app.state.websocket_manager = WebSocketManager()
-    app.state.chat_service = ChatService()
+    app.state.payment_gateway = PaymentGateway()
+    app.state.chat_service = ChatService(payment_gateway=app.state.payment_gateway)
     app.state.metrics_service = MetricsService(event_store)
     app.state.utcnow = lambda: datetime.now(timezone.utc)
     yield

@@ -28,6 +28,12 @@ export function connectSocket() {
           status: data.payment_status,
           payment_ref: data.payment_ref,
           flagged: data.flagged,
+          anomaly_reason: data.anomaly_reason,
+          anomaly_signal: data.anomaly_signal,
+          slash_mode: data.slash_mode,
+          payer_wallet_address: data.payer_wallet_address,
+          beneficiary_wallet_address: data.beneficiary_wallet_address,
+          victim_address: data.beneficiary_wallet_address,
         });
         if (typeof data.bond_balance === "number") {
           useAgentStore.getState().setBondBalance(data.bond_balance);
@@ -41,6 +47,8 @@ export function connectSocket() {
           bond_balance_after: data.new_balance,
           tx_hash: data.tx_hash,
           victim_address: data.victim_address,
+          beneficiary_wallet_address: data.beneficiary_wallet_address,
+          slash_mode: data.slash_mode,
         });
         useAgentStore.getState().setBondBalance(data.new_balance);
       }

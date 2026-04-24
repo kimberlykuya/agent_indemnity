@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     default: "Agent Indemnity",
     template: "%s | Agent Indemnity",
   },
-  description: "USDC-backed AI performance bond with Gemini routing, Circle Nanopayments, and Arc settlement.",
+  description: "Wallet-bound AI request payments with Arc-backed slashing and beneficiary-visible accountability.",
   applicationName: "Agent Indemnity",
   keywords: [
     "Agent Indemnity",
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
   ],
   openGraph: {
     title: "Agent Indemnity",
-    description: "USDC-backed AI performance bond with Gemini routing, Circle Nanopayments, and Arc settlement.",
+    description: "Wallet-bound AI request payments with Arc-backed slashing and beneficiary-visible accountability.",
     url: "/",
     siteName: "Agent Indemnity",
     type: "website",
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary",
     title: "Agent Indemnity",
-    description: "USDC-backed AI performance bond with Gemini routing, Circle Nanopayments, and Arc settlement.",
+    description: "Wallet-bound AI request payments with Arc-backed slashing and beneficiary-visible accountability.",
   },
 };
 
