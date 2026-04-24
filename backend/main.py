@@ -7,12 +7,20 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.agent import config
-from backend.api.routes import router
-from backend.api.websocket_manager import WebSocketManager
-from backend.services.chat_service import ChatService
-from backend.services.event_store import EventStore
-from backend.services.metrics_service import MetricsService
+try:
+    from backend.agent import config
+    from backend.api.routes import router
+    from backend.api.websocket_manager import WebSocketManager
+    from backend.services.chat_service import ChatService
+    from backend.services.event_store import EventStore
+    from backend.services.metrics_service import MetricsService
+except ImportError:  # pragma: no cover - Railway root_directory="backend" fallback
+    from agent import config
+    from api.routes import router
+    from api.websocket_manager import WebSocketManager
+    from services.chat_service import ChatService
+    from services.event_store import EventStore
+    from services.metrics_service import MetricsService
 
 logger = logging.getLogger(__name__)
 

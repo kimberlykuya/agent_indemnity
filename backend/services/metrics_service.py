@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from backend.services.event_store import EventStore
+try:
+    from backend.services.event_store import EventStore
+except ImportError:  # pragma: no cover - compatibility fallback
+    from services.event_store import EventStore
 
 
 class MetricsService:

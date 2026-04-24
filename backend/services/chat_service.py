@@ -4,7 +4,10 @@ from datetime import datetime, timezone
 
 from pydantic import ValidationError
 
-from backend.api.schemas import ChatResponse
+try:
+    from backend.api.schemas import ChatResponse
+except ImportError:  # pragma: no cover - compatibility fallback
+    from api.schemas import ChatResponse
 
 try:
     from backend.agent.customer_service import handle_request
