@@ -6,6 +6,7 @@ export type PaymentProof = {
   proof_token: string;
   payer_wallet_address: string;
   facilitator_tx_ref: string;
+  payment_tx_hash?: string;
 };
 
 export type ChatResponse = {
@@ -28,6 +29,7 @@ export type ChatResponse = {
   beneficiary_wallet_address: string;
   anomaly_signal: "none" | "rule" | "embedding" | "rule+embedding";
   slash_mode: "none" | "auto" | "manual";
+  slash_error?: string | null;
   latency_ms?: number;
   timestamp?: string | number;
 };
@@ -72,6 +74,9 @@ export type BondStatusResponse = {
   balance: number;
   state: string;
   total_paid_requests: number;
+  alert_floor_usdc: number;
+  is_below_alert_floor: boolean;
+  warning_message?: string | null;
 };
 
 type SendChatMessageInput = {

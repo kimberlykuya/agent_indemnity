@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
+from threading import Lock
 
 from pydantic import ValidationError
 
@@ -60,6 +62,9 @@ class ChatService:
         self._payment_gateway = payment_gateway or PaymentGateway()
         self._bond_balance_reader = bond_balance_reader
         self._now_factory = now_factory or (lambda: datetime.now(timezone.utc))
+        self._lock = Lock()
+        self._completed_by_request: dict[str, ChatResponse] = {}
+        self._pending_by_request: dict[str, PaymentChallengeResponse] = {}
 
     def process_message(
         self,
@@ -70,11 +75,23 @@ class ChatService:
         payment_challenge_token: str | None = None,
         payment_proof: dict | None = None,
     ) -> ChatResponse:
+        request_key = self._request_key(
+            message=message,
+            user_id=user_id,
+            user_wallet_address=user_wallet_address,
+        )
+
+        with self._lock:
+            cached_response = self._completed_by_request.get(request_key)
+        if cached_response is not None:
+            return cached_response.model_copy(update={"idempotent_replay": True}, deep=True)
+
         if not payment_challenge_token or payment_proof is None:
             raise self._payment_required(
                 message=message,
                 user_id=user_id,
                 user_wallet_address=user_wallet_address,
+                request_key=request_key,
             )
 
         try:
@@ -107,7 +124,7 @@ class ChatService:
             raise ChatServiceError("Failed to fetch bond balance", status_code=502) from exc
 
         try:
-            return ChatResponse(
+            response = ChatResponse(
                 reply=raw["reply"],
                 model=raw["model"],
                 route_category=self._normalize_route(raw["route_category"]),
@@ -126,6 +143,8 @@ class ChatService:
                 beneficiary_wallet_address=str(raw["beneficiary_wallet_address"]),
                 anomaly_signal=str(raw.get("anomaly_signal", "none")),
                 slash_mode=str(raw.get("slash_mode", "none")),
+                slash_error=raw.get("slash_error"),
+                idempotent_replay=False,
                 timestamp=self._now_factory(),
             )
         except KeyError as exc:
@@ -133,13 +152,24 @@ class ChatService:
         except ValidationError as exc:
             raise ChatServiceError("Chat service returned an invalid response", status_code=500) from exc
 
+        with self._lock:
+            self._completed_by_request[request_key] = response
+            self._pending_by_request.pop(request_key, None)
+        return response
+
     def _payment_required(
         self,
         *,
         message: str,
         user_id: str,
         user_wallet_address: str,
+        request_key: str,
     ) -> PaymentRequiredError:
+        with self._lock:
+            cached_challenge = self._pending_by_request.get(request_key)
+        if cached_challenge is not None and cached_challenge.expires_at > self._now_factory():
+            return PaymentRequiredError(cached_challenge.model_copy(deep=True))
+
         try:
             quote = self._quoter(message)
         except Exception as exc:
@@ -165,6 +195,8 @@ class ChatService:
             facilitator_url=self._payment_gateway.facilitator_url,
             payment_instructions=self._payment_gateway.build_instructions(challenge),
         )
+        with self._lock:
+            self._pending_by_request[request_key] = payload.model_copy(deep=True)
         return PaymentRequiredError(payload)
 
     @staticmethod
@@ -181,3 +213,8 @@ class ChatService:
         if payment_status in {"provider_error", "payment_failed", "failed"}:
             return "failed"
         return "authorized"
+
+    @staticmethod
+    def _request_key(*, message: str, user_id: str, user_wallet_address: str) -> str:
+        raw = "|".join([user_id.strip(), user_wallet_address.strip().lower(), message.strip()])
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()

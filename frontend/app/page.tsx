@@ -25,6 +25,7 @@ export default function ComplianceDashboard() {
   const transactions = useAgentStore((state) => state.transactions);
   const setTransactions = useAgentStore((state) => state.setTransactions);
   const setBondBalance = useAgentStore((state) => state.setBondBalance);
+  const setBondAlert = useAgentStore((state) => state.setBondAlert);
   const setTransactionContext = useAgentStore((state) => state.setTransactionContext);
   const [isRunningDemo, setIsRunningDemo] = useState(false);
   const demoAbortControllerRef = useRef<AbortController | null>(null);
@@ -41,6 +42,7 @@ export default function ComplianceDashboard() {
         if (!isActive) return;
         setTransactions(transactions);
         setBondBalance(bondStatus.balance);
+        setBondAlert(bondStatus.alert_floor_usdc, bondStatus.warning_message ?? null);
       } catch (error) {
         console.error("Failed to bootstrap dashboard state", error);
       }
@@ -52,7 +54,7 @@ export default function ComplianceDashboard() {
       isActive = false;
       disconnectSocket();
     };
-  }, [setBondBalance, setTransactions]);
+  }, [setBondAlert, setBondBalance, setTransactions]);
 
   const snippet = `curl -X POST https://api.agentindemnity.com/v1/chat \\
   -H "Authorization: Bearer sk-live-..." \\
@@ -75,11 +77,31 @@ export default function ComplianceDashboard() {
           throw new DOMException("Demo sequence aborted", "AbortError");
         }
 
-        const result = await sendChatMessage(message, controller.signal);
-        setTransactionContext(result.payment_ref ?? "", {
-          prompt: message,
-          reply: result.reply,
+        const challenge = await sendChatMessage({
+          message,
+          userId: "demo-sequence",
+          userWalletAddress: "0x191cc4e34e54444b9e10f4e3311c87382b0c0654",
+          signal: controller.signal,
         });
+
+        if (challenge.kind === "payment_required") {
+          const result = await sendChatMessage({
+            message,
+            userId: "demo-sequence",
+            userWalletAddress: "0x191cc4e34e54444b9e10f4e3311c87382b0c0654",
+            paymentChallengeToken: challenge.payment_challenge_token,
+            paymentProof: {
+              proof_token: challenge.payment_challenge_token,
+              payer_wallet_address: "0x191cc4e34e54444b9e10f4e3311c87382b0c0654",
+              facilitator_tx_ref: `demo-sequence-${Date.now()}`,
+            },
+            signal: controller.signal,
+          });
+          setTransactionContext(result.payment_ref ?? "", {
+            prompt: message,
+            reply: result.reply,
+          });
+        }
       }
 
       toast.success("Demo sequence complete", { id: "demo-sequence" });

@@ -13,6 +13,8 @@ type TransactionContext = {
 interface AgentState {
   transactions: Transaction[];
   bondBalance: number | null;
+  bondAlertFloor: number | null;
+  bondWarning: string | null;
   anomaliesCount: number;
   routeCounts: Record<string, number>;
   transactionContextByRef: Record<string, TransactionContext>;
@@ -21,6 +23,7 @@ interface AgentState {
   setTransactionContext: (reference: string, context: TransactionContext) => void;
   slashBond: (amount: number) => void;
   setBondBalance: (balance: number) => void;
+  setBondAlert: (alertFloor: number | null, warning: string | null) => void;
 }
 
 const routeKeys = ["general", "technical", "legal", "fallback"] as const;
@@ -68,6 +71,8 @@ const summarizeTransactions = (transactions: Transaction[]) => {
 export const useAgentStore = create<AgentState>((set) => ({
   transactions: [],
   bondBalance: null,
+  bondAlertFloor: null,
+  bondWarning: null,
   anomaliesCount: 0,
   routeCounts: emptyRouteCounts(),
   transactionContextByRef: {},
@@ -129,4 +134,5 @@ export const useAgentStore = create<AgentState>((set) => ({
   })),
 
   setBondBalance: (balance) => set({ bondBalance: balance }),
+  setBondAlert: (alertFloor, warning) => set({ bondAlertFloor: alertFloor, bondWarning: warning }),
 }));

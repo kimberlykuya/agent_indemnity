@@ -44,11 +44,19 @@ class PaymentProof(APIModel):
     proof_token: str
     payer_wallet_address: str
     facilitator_tx_ref: str
+    payment_tx_hash: str | None = None
 
     @field_validator("proof_token", "payer_wallet_address", "facilitator_tx_ref")
     @classmethod
     def validate_non_empty_fields(cls, value: str, info) -> str:
         return _require_non_empty(value, info.field_name)
+
+    @field_validator("payment_tx_hash")
+    @classmethod
+    def validate_optional_payment_tx_hash(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _require_non_empty(value, "payment_tx_hash")
 
 
 class ChatRequest(APIModel):
@@ -130,6 +138,8 @@ class ChatResponse(APIModel):
     beneficiary_wallet_address: str
     anomaly_signal: AnomalySignal = "none"
     slash_mode: SlashMode = "none"
+    slash_error: str | None = None
+    idempotent_replay: bool = False
     timestamp: datetime
 
     @field_validator("reply", "model", "payment_ref", "payer_wallet_address", "beneficiary_wallet_address")
@@ -148,6 +158,13 @@ class ChatResponse(APIModel):
         if value is None:
             return None
         return _require_non_empty(value, "slash_tx_hash")
+
+    @field_validator("slash_error")
+    @classmethod
+    def validate_optional_slash_error(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _require_non_empty(value, "slash_error")
 
     @field_validator("slash_victim_address")
     @classmethod
@@ -202,6 +219,9 @@ class BondStatusResponse(APIModel):
     balance: float
     state: str
     total_paid_requests: int = Field(..., ge=0)
+    alert_floor_usdc: float = Field(..., ge=0)
+    is_below_alert_floor: bool
+    warning_message: str | None = None
 
     @field_validator("balance")
     @classmethod
@@ -212,6 +232,13 @@ class BondStatusResponse(APIModel):
     @classmethod
     def validate_state(cls, value: str) -> str:
         return _require_non_empty(value, "state")
+
+    @field_validator("warning_message")
+    @classmethod
+    def validate_optional_warning_message(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _require_non_empty(value, "warning_message")
 
 
 class TransactionRecord(APIModel):

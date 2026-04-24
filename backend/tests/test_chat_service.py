@@ -156,3 +156,67 @@ def test_process_message_returns_normalized_paid_response() -> None:
     assert response.payment_ref == "0xpaydemo"
     assert response.payer_wallet_address == "0xabc123"
     assert response.beneficiary_wallet_address == "0xabc123"
+
+
+def test_process_message_is_idempotent_after_success() -> None:
+    paid_calls: list[dict] = []
+
+    service = ChatService(
+        quoter=lambda message: {
+            "route_category": "general",
+            "route_confidence": 0.9,
+            "price_usdc": 0.001,
+        },
+        paid_handler=lambda **kwargs: paid_calls.append(kwargs) or {
+            "reply": "Processed",
+            "model": "demo-model",
+            "route_category": "general",
+            "route_confidence": 0.9,
+            "price_usdc": 0.001,
+            "payment_status": "settled",
+            "payment_ref": "0xpaydemo",
+            "flagged": False,
+            "anomaly_reason": None,
+            "slash_executed": False,
+            "slash_tx_hash": None,
+            "slash_payout": None,
+            "slash_victim_address": None,
+            "payer_wallet_address": "0xabc123",
+            "beneficiary_wallet_address": "0xabc123",
+            "anomaly_signal": "none",
+            "slash_mode": "none",
+        },
+        payment_gateway=StubGateway(
+            settlement=PaymentSettlement(
+                payment_ref="x402:pay_demo",
+                payer_wallet_address="0xabc123",
+                route_category="general",
+                route_confidence=0.9,
+                price_usdc=0.001,
+            )
+        ),
+        bond_balance_reader=lambda: 100.0,
+        now_factory=lambda: FIXED_NOW,
+    )
+
+    first = service.process_message(
+        message="hello",
+        user_id="user_1",
+        user_wallet_address="0xabc123",
+        payment_challenge_token="challenge-token",
+        payment_proof={
+            "proof_token": "challenge-token",
+            "payer_wallet_address": "0xabc123",
+            "facilitator_tx_ref": "demo-ref",
+        },
+    )
+    second = service.process_message(
+        message="hello",
+        user_id="user_1",
+        user_wallet_address="0xabc123",
+    )
+
+    assert first.payment_ref == "0xpaydemo"
+    assert second.payment_ref == "0xpaydemo"
+    assert second.idempotent_replay is True
+    assert len(paid_calls) == 1

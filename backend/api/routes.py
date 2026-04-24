@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+import os
 
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.concurrency import run_in_threadpool
@@ -78,71 +79,72 @@ async def post_agent_chat(request: Request, payload: ChatRequest) -> ChatRespons
         logger.exception("Unexpected chat failure")
         raise _http_error(500, "internal_error", "Unexpected server error") from exc
 
-    event = TransactionRecord(
-        type="request_paid",
-        amount=response.price_usdc,
-        timestamp=response.timestamp,
-        bond_balance_after=response.bond_balance,
-        model=response.model,
-        route_category=response.route_category,
-        status=response.payment_status,
-        payment_ref=response.payment_ref,
-        flagged=response.flagged,
-        anomaly_reason=response.anomaly_reason,
-        anomaly_signal=response.anomaly_signal,
-        slash_mode=response.slash_mode,
-        payer_wallet_address=response.payer_wallet_address,
-        beneficiary_wallet_address=response.beneficiary_wallet_address,
-        victim_address=response.beneficiary_wallet_address,
-    )
-    request.app.state.event_store.add_event(event.model_dump())
+    if not response.idempotent_replay:
+        event = TransactionRecord(
+            type="request_paid",
+            amount=response.price_usdc,
+            timestamp=response.timestamp,
+            bond_balance_after=response.bond_balance,
+            model=response.model,
+            route_category=response.route_category,
+            status=response.payment_status,
+            payment_ref=response.payment_ref,
+            flagged=response.flagged,
+            anomaly_reason=response.anomaly_reason,
+            anomaly_signal=response.anomaly_signal,
+            slash_mode=response.slash_mode,
+            payer_wallet_address=response.payer_wallet_address,
+            beneficiary_wallet_address=response.beneficiary_wallet_address,
+            victim_address=response.beneficiary_wallet_address,
+        )
+        request.app.state.event_store.add_event(event.model_dump())
 
-    await request.app.state.websocket_manager.broadcast(
-        "request_paid",
-        {
-            "amount": response.price_usdc,
-            "route_category": response.route_category,
-            "model": response.model,
-            "payment_status": response.payment_status,
-            "payment_ref": response.payment_ref,
-            "flagged": response.flagged,
-            "anomaly_reason": response.anomaly_reason,
-            "anomaly_signal": response.anomaly_signal,
-            "slash_mode": response.slash_mode,
-            "payer_wallet_address": response.payer_wallet_address,
-            "beneficiary_wallet_address": response.beneficiary_wallet_address,
-            "timestamp": response.timestamp,
-            "bond_balance": response.bond_balance,
-        },
-    )
-
-    if response.flagged:
         await request.app.state.websocket_manager.broadcast(
-            "anomaly_flagged",
+            "request_paid",
             {
+                "amount": response.price_usdc,
                 "route_category": response.route_category,
+                "model": response.model,
+                "payment_status": response.payment_status,
                 "payment_ref": response.payment_ref,
+                "flagged": response.flagged,
                 "anomaly_reason": response.anomaly_reason,
                 "anomaly_signal": response.anomaly_signal,
                 "slash_mode": response.slash_mode,
                 "payer_wallet_address": response.payer_wallet_address,
                 "beneficiary_wallet_address": response.beneficiary_wallet_address,
                 "timestamp": response.timestamp,
+                "bond_balance": response.bond_balance,
             },
         )
-        if response.slash_executed and response.slash_tx_hash and response.slash_payout is not None:
-            await _emit_bond_slashed_event(
-                request,
-                victim_address=response.slash_victim_address or "",
-                response=SlashResponse(
-                    tx_hash=response.slash_tx_hash,
-                    payout=response.slash_payout,
-                    new_balance=response.bond_balance,
-                    beneficiary_wallet_address=response.beneficiary_wallet_address,
-                    slash_mode=response.slash_mode if response.slash_mode in {"auto", "manual"} else "auto",
-                    timestamp=response.timestamp,
-                ),
+
+        if response.flagged:
+            await request.app.state.websocket_manager.broadcast(
+                "anomaly_flagged",
+                {
+                    "route_category": response.route_category,
+                    "payment_ref": response.payment_ref,
+                    "anomaly_reason": response.anomaly_reason,
+                    "anomaly_signal": response.anomaly_signal,
+                    "slash_mode": response.slash_mode,
+                    "payer_wallet_address": response.payer_wallet_address,
+                    "beneficiary_wallet_address": response.beneficiary_wallet_address,
+                    "timestamp": response.timestamp,
+                },
             )
+            if response.slash_executed and response.slash_tx_hash and response.slash_payout is not None:
+                await _emit_bond_slashed_event(
+                    request,
+                    victim_address=response.slash_victim_address or "",
+                    response=SlashResponse(
+                        tx_hash=response.slash_tx_hash,
+                        payout=response.slash_payout,
+                        new_balance=response.bond_balance,
+                        beneficiary_wallet_address=response.beneficiary_wallet_address,
+                        slash_mode=response.slash_mode if response.slash_mode in {"auto", "manual"} else "auto",
+                        timestamp=response.timestamp,
+                    ),
+                )
 
     return response
 
@@ -229,10 +231,19 @@ async def get_bond_status(request: Request) -> BondStatusResponse:
     except Exception as exc:
         logger.exception("Bond status read failed")
         raise _http_error(503, "bond_status_failed", "Unable to read on-chain bond balance") from exc
+    alert_floor = float(os.getenv("BOND_ALERT_FLOOR_USDC", "5") or 5.0)
+    is_below_alert_floor = balance < alert_floor
     return BondStatusResponse(
         balance=balance,
         state="ACTIVE" if balance > 0 else "DEPLETED",
         total_paid_requests=request.app.state.event_store.count_paid_requests(),
+        alert_floor_usdc=alert_floor,
+        is_below_alert_floor=is_below_alert_floor,
+        warning_message=(
+            f"Bond balance is below the configured alert floor of {alert_floor:.2f} USDC."
+            if is_below_alert_floor
+            else None
+        ),
     )
 
 

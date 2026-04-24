@@ -1,5 +1,6 @@
 import logging
 import time
+import re
 
 from blockchain.arc_client import PERFORMANCE_BOND_ADDR, USDC_CONTRACT_ADDR, get_web3
 
@@ -59,6 +60,7 @@ _ERC20_ABI = [
 _MAX_UINT256 = (1 << 256) - 1
 _TXPOOL_FULL_RETRY_ATTEMPTS = 4
 _TXPOOL_FULL_BACKOFF_SECONDS = 2.0
+_TX_HASH_RE = re.compile(r"^0x[a-fA-F0-9]{64}$")
 
 
 def _get_contract(w3):
@@ -147,6 +149,55 @@ def _read_onchain_bond_balance() -> float:
 def get_bond_balance() -> float:
     """Return the on-chain bond balance in USDC."""
     return _read_onchain_bond_balance()
+
+
+def is_verifier_safe_tx_hash(value: str | None) -> bool:
+    return bool(value and _TX_HASH_RE.fullmatch(value.strip()))
+
+
+def verify_topup_tx(
+    tx_hash: str,
+    *,
+    expected_min_amount_usdc: float,
+    allowed_sender_addresses: list[str] | tuple[str, ...] | None = None,
+) -> str:
+    """Verify that a confirmed Arc transaction is a topUpBond() call with enough value."""
+    if not PERFORMANCE_BOND_ADDR:
+        raise ValueError("PERFORMANCE_BOND_ADDRESS not set")
+    if expected_min_amount_usdc <= 0:
+        raise ValueError("expected_min_amount_usdc must be greater than zero")
+    if not is_verifier_safe_tx_hash(tx_hash):
+        raise ValueError("Invalid Arc transaction hash")
+
+    w3 = get_web3()
+    contract = _get_contract(w3)
+    normalized_tx_hash = tx_hash.strip()
+    tx = w3.eth.get_transaction(normalized_tx_hash)
+    receipt = w3.eth.get_transaction_receipt(normalized_tx_hash)
+
+    if receipt.status != 1:
+        raise ValueError("Arc transaction has not confirmed successfully")
+
+    tx_to = tx.get("to")
+    if not tx_to or w3.to_checksum_address(tx_to) != w3.to_checksum_address(PERFORMANCE_BOND_ADDR):
+        raise ValueError("Arc transaction does not target the performance bond contract")
+
+    decoded_function, arguments = contract.decode_function_input(tx.get("input", "0x"))
+    if decoded_function.fn_name != "topUpBond":
+        raise ValueError("Arc transaction is not a topUpBond() call")
+
+    amount_raw = int(arguments.get("amount", 0))
+    expected_min_raw = int(expected_min_amount_usdc * 1_000_000)
+    if amount_raw < expected_min_raw:
+        raise ValueError("Arc topUpBond() amount is below the required premium")
+
+    if allowed_sender_addresses:
+        allowed = {w3.to_checksum_address(address) for address in allowed_sender_addresses if address}
+        sender = w3.to_checksum_address(tx["from"])
+        if allowed and sender not in allowed:
+            raise ValueError("Arc topUpBond() sender is not authorized for this request")
+
+    return normalized_tx_hash
 
 
 def pay_premium(amount_usdc: float) -> str:

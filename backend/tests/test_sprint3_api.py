@@ -45,6 +45,19 @@ def test_health_endpoint_returns_ok(client: TestClient):
     assert response.json() == {"status": "ok"}
 
 
+def test_bond_status_includes_alert_metadata(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("BOND_ALERT_FLOOR_USDC", "10")
+    monkeypatch.setattr("backend.api.routes.get_bond_balance", lambda: 4.5)
+
+    response = client.get("/bond/status")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["alert_floor_usdc"] == 10
+    assert body["is_below_alert_floor"] is True
+    assert "below the configured alert floor" in body["warning_message"]
+
+
 def test_chat_request_requires_payment_challenge(client: TestClient):
     response = client.post(
         "/agent/chat",
@@ -150,6 +163,48 @@ def test_paid_chat_request_persists_wallet_and_enforcement_metadata(client):
     assert third_event["event"] == "bond_slashed"
     assert third_event["data"]["beneficiary_wallet_address"] == "0xabc123"
     assert third_event["data"]["slash_mode"] == "auto"
+
+
+def test_idempotent_replay_does_not_duplicate_feed_events(client):
+    _set_chat_service(
+        client,
+        response={
+            "reply": "Replay",
+            "model": "demo-model",
+            "route_category": "general",
+            "route_confidence": 0.9,
+            "price_usdc": 0.001,
+            "payment_status": "settled",
+            "bond_balance": 50.0,
+            "flagged": False,
+            "payment_ref": "0xpay123",
+            "payer_wallet_address": "0xabc123",
+            "beneficiary_wallet_address": "0xabc123",
+            "anomaly_signal": "none",
+            "slash_mode": "none",
+            "idempotent_replay": True,
+            "timestamp": FIXED_CHAT_TIME,
+        },
+    )
+
+    response = client.post(
+        "/agent/chat",
+        json={
+            "message": "hello",
+            "user_id": "user_123",
+            "user_wallet_address": "0xabc123",
+            "payment_challenge_token": "challenge",
+            "payment_proof": {
+                "proof_token": "challenge",
+                "payer_wallet_address": "0xabc123",
+                "facilitator_tx_ref": "demo-ref",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["idempotent_replay"] is True
+    assert client.get("/transactions").json() == []
 
 
 def test_manual_bond_slash_returns_manual_metadata(client: TestClient, monkeypatch: pytest.MonkeyPatch):

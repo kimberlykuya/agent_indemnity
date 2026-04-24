@@ -10,6 +10,8 @@ import { cn } from "../lib/utils";
 
 export function BondBalance() {
   const balance = useAgentStore((state) => state.bondBalance);
+  const bondAlertFloor = useAgentStore((state) => state.bondAlertFloor);
+  const bondWarning = useAgentStore((state) => state.bondWarning);
   const transactions = useAgentStore((state) => state.transactions);
   const [isSlashing, setIsSlashing] = useState(false);
   const [manualVictimAddress, setManualVictimAddress] = useState("");
@@ -50,14 +52,15 @@ export function BondBalance() {
   };
 
   const hasBalance = balance !== null;
-  const isHealthy = hasBalance && balance > 0.01;
+  const effectiveAlertFloor = bondAlertFloor ?? 0.01;
+  const isHealthy = hasBalance && balance > effectiveAlertFloor;
 
   return (
-    <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 flex flex-col justify-between h-[240px]">
-      <div className="flex justify-between items-start gap-4">
-        <div className="space-y-1">
+    <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 flex flex-col gap-5 min-h-[240px] overflow-hidden">
+      <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
+        <div className="space-y-1 min-w-0">
           <h2 className="text-neutral-400 text-sm font-medium">Performance Bond</h2>
-          <div className="text-4xl font-bold font-mono tracking-tight text-white">
+          <div className="min-w-0 overflow-hidden text-3xl font-bold font-mono tracking-tight text-white sm:text-4xl break-all">
             {hasBalance
               ? `$${balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}`
               : "--"}
@@ -67,7 +70,7 @@ export function BondBalance() {
 
         <div
           className={cn(
-            "px-3 py-1.5 rounded-full flex items-center gap-2 text-xs font-medium",
+            "w-fit max-w-full px-3 py-1.5 rounded-full flex items-center gap-2 text-xs font-medium shrink-0",
             hasBalance && isHealthy
               ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
               : "bg-red-500/10 text-red-400 border border-red-500/20"
@@ -78,7 +81,12 @@ export function BondBalance() {
         </div>
       </div>
 
-      <div className="space-y-3 mt-4">
+      <div className="space-y-3 min-w-0">
+        {bondWarning && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-300 break-words">
+            {bondWarning}
+          </div>
+        )}
         <div>
           <label className="block text-[10px] uppercase tracking-[0.2em] text-neutral-500 mb-2">
             Manual Beneficiary Override
@@ -93,6 +101,11 @@ export function BondBalance() {
           <p className="text-[11px] text-neutral-500 mt-2">
             Defaults to the latest paid request wallet when left blank.
           </p>
+          {bondAlertFloor !== null && (
+            <p className="text-[11px] text-neutral-500 mt-1">
+              Alert floor: ${bondAlertFloor.toFixed(2)} USDC
+            </p>
+          )}
         </div>
 
         <button

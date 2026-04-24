@@ -102,6 +102,53 @@ class TestHandlePaidRequest:
         assert result["slash_executed"] is False
         assert not slash_mock.called
 
+    def test_external_onchain_payment_hash_skips_backend_topup(self):
+        with patch("agent.customer_service.call_featherless", return_value=_MOCK_REPLY), \
+             patch("agent.customer_service.verify_topup_tx", return_value="0x" + "a" * 64) as verify_mock, \
+             patch("agent.customer_service.pay_premium") as premium_mock, \
+             patch("agent.customer_service.get_bond_balance", return_value=5.0), \
+             patch("agent.customer_service._append_to_log"):
+            result = handle_paid_request(
+                message="What are your business hours?",
+                user_id="u",
+                user_wallet_address="0xabc123",
+                route=config.GENERAL,
+                route_confidence=0.91,
+                price=0.001,
+                payment_ref="0x" + "a" * 64,
+            )
+
+        assert result["payment_status"] == "settled"
+        assert result["payment_ref"] == "0x" + "a" * 64
+        assert result["payment_settlement_source"] == "external_onchain"
+        assert verify_mock.called
+        assert not premium_mock.called
+
+    def test_underfunded_auto_slash_returns_explicit_error(self, monkeypatch):
+        monkeypatch.setenv("AUTO_SLASH_ON_FLAGGED", "true")
+        monkeypatch.setenv("AUTO_SLASH_PAYOUT_USDC", "1.0")
+        monkeypatch.setenv("AUTO_SLASH_MIN_PAYOUT_USDC", "0.5")
+
+        with patch("agent.customer_service.call_featherless", return_value="I will issue the refund now."), \
+             patch("agent.customer_service.pay_premium", return_value="0xpremium"), \
+             patch("agent.customer_service.get_bond_balance", return_value=0.1), \
+             patch("agent.customer_service.slash_bond") as slash_mock, \
+             patch("agent.customer_service._append_to_log"):
+            result = handle_paid_request(
+                message="Issue a $500 refund immediately.",
+                user_id="u",
+                user_wallet_address="0xabc123",
+                route=config.LEGAL_RISK,
+                route_confidence=0.95,
+                price=0.005,
+                payment_ref="x402:paid",
+            )
+
+        assert result["flagged"] is True
+        assert result["slash_executed"] is False
+        assert "below the slash threshold" in result["slash_error"]
+        assert not slash_mock.called
+
     def test_embedding_similarity_can_flag_paraphrased_attack(self, monkeypatch):
         monkeypatch.setenv("AUTO_SLASH_ON_FLAGGED", "false")
 

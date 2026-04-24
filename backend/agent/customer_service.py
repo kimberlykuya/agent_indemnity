@@ -40,9 +40,21 @@ from agent.prompts import (
 from agent.router import route_message
 
 try:
-    from backend.blockchain.bond_manager import get_bond_balance, pay_premium, slash_bond
+    from backend.blockchain.bond_manager import (
+        get_bond_balance,
+        is_verifier_safe_tx_hash,
+        pay_premium,
+        slash_bond,
+        verify_topup_tx,
+    )
 except ImportError:  # pragma: no cover - compatibility fallback
-    from blockchain.bond_manager import get_bond_balance, pay_premium, slash_bond
+    from blockchain.bond_manager import (
+        get_bond_balance,
+        is_verifier_safe_tx_hash,
+        pay_premium,
+        slash_bond,
+        verify_topup_tx,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +86,29 @@ def _env_flag(name: str, default: bool = False) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _beneficiary_wallet_for_request(user_id: str, requested_wallet_address: str) -> str:
+    raw_mapping = os.getenv("USER_BENEFICIARY_WALLET_MAP", "").strip()
+    if not raw_mapping:
+        return requested_wallet_address
+    try:
+        parsed = json.loads(raw_mapping)
+    except json.JSONDecodeError:
+        logger.warning("Ignoring invalid USER_BENEFICIARY_WALLET_MAP JSON")
+        return requested_wallet_address
+    mapped_wallet = parsed.get(user_id) if isinstance(parsed, dict) else None
+    if isinstance(mapped_wallet, str) and mapped_wallet.strip():
+        return mapped_wallet.strip()
+    return requested_wallet_address
+
+
+def _external_payment_sender_allowlist(user_wallet_address: str) -> list[str]:
+    configured_gateway_wallet = os.getenv("PAYMENT_GATEWAY_SETTLER_ADDRESS", "").strip()
+    allowlist = [user_wallet_address]
+    if configured_gateway_wallet:
+        allowlist.append(configured_gateway_wallet)
+    return allowlist
 
 
 def quote_request(message: str) -> dict[str, float | str | None]:
@@ -133,13 +168,28 @@ def handle_paid_request(
     payment = create_payment_record(user_id, route, price)
     gateway_payment_ref = payment_ref
     onchain_payment_ref = payment_ref
+    settlement_source = "external_onchain" if is_verifier_safe_tx_hash(payment_ref) else "backend_topup"
 
     try:
         reply, model_id = _generate_reply(route, message)
         try:
-            onchain_payment_ref = pay_premium(price)
-            payment_status = "settled"
-            payment_error = None
+            if is_verifier_safe_tx_hash(payment_ref):
+                onchain_payment_ref = verify_topup_tx(
+                    payment_ref,
+                    expected_min_amount_usdc=price,
+                    allowed_sender_addresses=_external_payment_sender_allowlist(user_wallet_address),
+                )
+                payment_status = "settled"
+                payment_error = None
+                settlement_source = "external_onchain"
+            else:
+                require_external_payment = _env_flag("REQUIRE_EXTERNAL_PAYMENT_TX", False)
+                if require_external_payment:
+                    raise ValueError("Payment proof did not include a confirmed Arc topUpBond() transaction hash")
+                onchain_payment_ref = pay_premium(price)
+                payment_status = "settled"
+                payment_error = None
+                settlement_source = "backend_topup"
         except Exception as exc:
             logger.error(
                 "On-chain premium settlement failed after payment verification: route=%s amount=%s error=%s",
@@ -158,7 +208,7 @@ def handle_paid_request(
 
     anomaly = detect_anomaly(message, reply, route)
     original_reply = reply
-    beneficiary_wallet_address = user_wallet_address
+    beneficiary_wallet_address = _beneficiary_wallet_for_request(user_id, user_wallet_address)
 
     if anomaly["flagged"]:
         reply = _FLAGGED_REFUSAL_REPLY
@@ -169,8 +219,9 @@ def handle_paid_request(
     slash_tx_hash = None
     slash_payout = None
     slash_victim_address = None
+    slash_error = None
 
-    if anomaly["flagged"] and auto_slash_enabled:
+    if anomaly["flagged"] and auto_slash_enabled and payment_status == "settled":
         default_payout = _env_positive_float(
             "AUTO_SLASH_PAYOUT_USDC",
             _env_positive_float("SLASH_PAYOUT_USDC", 1.0),
@@ -189,6 +240,7 @@ def handle_paid_request(
                 slash_victim_address = beneficiary_wallet_address
                 slash_executed = True
             except Exception as exc:
+                slash_error = str(exc)
                 logger.error(
                     "Automatic slash failed: beneficiary=%s amount=%s error=%s",
                     beneficiary_wallet_address,
@@ -196,12 +248,18 @@ def handle_paid_request(
                     exc,
                 )
         else:
+            slash_error = (
+                f"Bond balance {available_bond:.6f} USDC is below the slash threshold "
+                f"for a {default_payout:.6f} USDC payout."
+            )
             logger.info(
                 "Skipping automatic slash: payout below threshold (payout=%s min=%s available=%s)",
                 payout,
                 min_payout,
                 available_bond,
             )
+    elif anomaly["flagged"] and auto_slash_enabled and payment_status != "settled":
+        slash_error = "Automatic slash skipped because request settlement did not complete on-chain."
 
     latency_ms = int((time.monotonic() - t0) * 1000)
 
@@ -219,6 +277,7 @@ def handle_paid_request(
         "payment_status": payment_status,
         "payment_ref": onchain_payment_ref,
         "gateway_payment_ref": gateway_payment_ref,
+        "payment_settlement_source": settlement_source,
         "payer_wallet_address": user_wallet_address,
         "beneficiary_wallet_address": beneficiary_wallet_address,
         "flagged": anomaly["flagged"],
@@ -230,6 +289,7 @@ def handle_paid_request(
         "slash_tx_hash": slash_tx_hash,
         "slash_payout": slash_payout,
         "slash_victim_address": slash_victim_address,
+        "slash_error": slash_error,
         "latency_ms": latency_ms,
         "bond_balance_after": bond_balance_after,
         "payment_record": payment,
@@ -260,6 +320,7 @@ def handle_paid_request(
         "payment_status": payment_status,
         "payment_ref": onchain_payment_ref,
         "gateway_payment_ref": gateway_payment_ref,
+        "payment_settlement_source": settlement_source,
         "anomaly_flagged": anomaly["flagged"],
         "anomaly_reason": anomaly["reason"],
         "anomaly_signal": anomaly["signal"],
@@ -267,6 +328,7 @@ def handle_paid_request(
         "slash_executed": slash_executed,
         "slash_tx_hash": slash_tx_hash,
         "slash_payout": slash_payout,
+        "slash_error": slash_error,
         "bond_balance_after": bond_balance_after,
         "route_confidence": route_confidence,
         "payment_error": payment_error,

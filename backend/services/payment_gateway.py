@@ -6,6 +6,9 @@ import hashlib
 import os
 import secrets
 from threading import Lock
+from urllib.parse import urlparse
+
+import httpx
 
 
 def _utcnow() -> datetime:
@@ -25,6 +28,22 @@ def _env_int(name: str, default: int) -> int:
     except ValueError:
         return default
     return value if value > 0 else default
+
+
+def _is_valid_http_url(value: str | None) -> bool:
+    if not value:
+        return False
+    try:
+        parsed = urlparse(value.strip())
+    except ValueError:
+        return False
+    if parsed.scheme not in {"http", "https"}:
+        return False
+    if not parsed.netloc or "." not in parsed.netloc:
+        return False
+    if "..." in parsed.netloc or parsed.netloc.startswith(".") or parsed.netloc.endswith("."):
+        return False
+    return True
 
 
 @dataclass(frozen=True)
@@ -48,6 +67,7 @@ class PaymentSettlement:
     route_category: str
     route_confidence: float | None
     price_usdc: float
+    settlement_source: str = "gateway_authorization"
 
 
 class PaymentGatewayError(RuntimeError):
@@ -73,6 +93,12 @@ class PaymentGateway:
     def facilitator_url(self) -> str | None:
         raw = os.getenv("X402_FACILITATOR_URL") or os.getenv("PAYMENT_FACILITATOR_URL")
         return raw.strip() if raw and raw.strip() else None
+
+    @property
+    def gateway_mode(self) -> str:
+        if os.getenv("PAYMENT_GATEWAY_MODE"):
+            return os.getenv("PAYMENT_GATEWAY_MODE", "stub").strip().lower()
+        return "facilitator" if self.facilitator_url else "stub"
 
     def create_challenge(
         self,
@@ -118,6 +144,7 @@ class PaymentGateway:
         }
         if self.facilitator_url:
             instructions["facilitator_url"] = self.facilitator_url
+            instructions["gateway_mode"] = self.gateway_mode
         return instructions
 
     def verify_payment(
@@ -181,16 +208,18 @@ class PaymentGateway:
                 status_code=402,
             )
 
+        settlement = self._verify_with_gateway(
+            challenge=challenge,
+            challenge_token=challenge_token,
+            user_wallet_address=user_wallet_address,
+            facilitator_tx_ref=facilitator_tx_ref,
+            payment_proof=payment_proof,
+        )
+
         with self._lock:
             self._challenges[challenge_token] = replace(challenge, used=True)
 
-        return PaymentSettlement(
-            payment_ref=f"x402:{facilitator_tx_ref}",
-            payer_wallet_address=user_wallet_address,
-            route_category=challenge.route_category,
-            route_confidence=challenge.route_confidence,
-            price_usdc=challenge.price_usdc,
-        )
+        return settlement
 
     def _get_challenge(self, token: str) -> PaymentChallenge:
         with self._lock:
@@ -202,3 +231,139 @@ class PaymentGateway:
                 status_code=402,
             )
         return challenge
+
+    def _verify_with_gateway(
+        self,
+        *,
+        challenge: PaymentChallenge,
+        challenge_token: str,
+        user_wallet_address: str,
+        facilitator_tx_ref: str,
+        payment_proof: dict[str, object],
+    ) -> PaymentSettlement:
+        if self.gateway_mode == "facilitator":
+            return self._verify_with_facilitator(
+                challenge=challenge,
+                challenge_token=challenge_token,
+                user_wallet_address=user_wallet_address,
+                facilitator_tx_ref=facilitator_tx_ref,
+                payment_proof=payment_proof,
+            )
+        return PaymentSettlement(
+            payment_ref=str(payment_proof.get("payment_tx_hash") or f"x402:{facilitator_tx_ref}"),
+            payer_wallet_address=user_wallet_address,
+            route_category=challenge.route_category,
+            route_confidence=challenge.route_confidence,
+            price_usdc=challenge.price_usdc,
+            settlement_source="stub_authorization",
+        )
+
+    def _verify_with_facilitator(
+        self,
+        *,
+        challenge: PaymentChallenge,
+        challenge_token: str,
+        user_wallet_address: str,
+        facilitator_tx_ref: str,
+        payment_proof: dict[str, object],
+    ) -> PaymentSettlement:
+        if not self.facilitator_url:
+            raise PaymentGatewayError(
+                "PAYMENT_GATEWAY_MODE=facilitator requires X402_FACILITATOR_URL.",
+                code="payment_gateway_misconfigured",
+                status_code=500,
+            )
+        if not _is_valid_http_url(self.facilitator_url):
+            raise PaymentGatewayError(
+                "X402_FACILITATOR_URL is not a valid HTTP(S) URL.",
+                code="payment_gateway_misconfigured",
+                status_code=500,
+            )
+
+        api_key = (
+            os.getenv("GATEWAY_API_KEY")
+            or os.getenv("CIRCLE_GATEWAY_API_KEY")
+            or os.getenv("CIRCLE_API_KEY")
+        )
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        payload = {
+            "challenge_token": challenge_token,
+            "facilitator_tx_ref": facilitator_tx_ref,
+            "payer_wallet_address": user_wallet_address,
+            "price_usdc": challenge.price_usdc,
+            "route_category": challenge.route_category,
+            "request_binding": {
+                "user_id": challenge.user_id,
+                "message_hash": challenge.message_hash,
+            },
+            "payment_proof": payment_proof,
+        }
+
+        try:
+            response = httpx.post(
+                self.facilitator_url,
+                json=payload,
+                headers=headers,
+                timeout=_env_int("PAYMENT_GATEWAY_TIMEOUT_SECONDS", 20),
+            )
+        except (httpx.HTTPError, UnicodeError, ValueError) as exc:
+            raise PaymentGatewayError(
+                f"Payment gateway verification failed: {exc}",
+                code="payment_gateway_unreachable",
+                status_code=502,
+            ) from exc
+
+        if response.status_code >= 400:
+            detail = None
+            try:
+                detail = response.json()
+            except ValueError:
+                detail = response.text
+            raise PaymentGatewayError(
+                f"Payment gateway rejected authorization: {detail}",
+                code="payment_gateway_rejected",
+                status_code=402,
+            )
+
+        try:
+            body = response.json()
+        except ValueError as exc:
+            raise PaymentGatewayError(
+                "Payment gateway returned invalid JSON.",
+                code="payment_gateway_invalid_response",
+                status_code=502,
+            ) from exc
+
+        authorized = bool(body.get("authorized", True))
+        if not authorized:
+            raise PaymentGatewayError(
+                str(body.get("message") or "Payment authorization was denied."),
+                code=str(body.get("code") or "payment_gateway_rejected"),
+                status_code=402,
+            )
+
+        payment_ref = str(
+            body.get("payment_tx_hash")
+            or body.get("tx_hash")
+            or body.get("payment_ref")
+            or payment_proof.get("payment_tx_hash")
+            or f"x402:{facilitator_tx_ref}"
+        ).strip()
+        if not payment_ref:
+            raise PaymentGatewayError(
+                "Payment gateway did not return a verifier-safe reference.",
+                code="payment_gateway_invalid_response",
+                status_code=502,
+            )
+
+        return PaymentSettlement(
+            payment_ref=payment_ref,
+            payer_wallet_address=user_wallet_address,
+            route_category=challenge.route_category,
+            route_confidence=challenge.route_confidence,
+            price_usdc=challenge.price_usdc,
+            settlement_source=str(body.get("settlement_source") or "facilitator_authorization"),
+        )

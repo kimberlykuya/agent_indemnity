@@ -58,6 +58,9 @@ export function AgentChat() {
     setMessages((prev) => [...prev, message]);
   };
 
+  const formatUsdc = (value: number | undefined, digits = 3) =>
+    typeof value === "number" && Number.isFinite(value) ? `$${value.toFixed(digits)} USDC` : "USDC pending";
+
   const requestChallenge = async (userMsg: string, trimmedWallet: string) => {
     const result = await sendChatMessage({
       message: userMsg,
@@ -87,7 +90,7 @@ export function AgentChat() {
     appendMessage({
       id: `${Date.now()}-challenge`,
       role: "system",
-      content: `Payment challenge received: ${result.route_category} route, $${result.price_usdc.toFixed(3)} USDC, expires ${new Date(result.expires_at).toLocaleTimeString()}.`,
+      content: `Payment challenge received: ${result.route_category} route, ${formatUsdc(result.price_usdc)}, expires ${new Date(result.expires_at).toLocaleTimeString()}.`,
       price: result.price_usdc,
       route: result.route_category,
     });
@@ -336,7 +339,7 @@ export function AgentChat() {
                       message.flagged ? "text-red-400" : "text-emerald-500"
                     )}
                   >
-                    {message.flagged ? "Blocked" : `$${message.price.toFixed(3)} USDC`}
+                    {message.flagged ? "Blocked" : formatUsdc(message.price)}
                   </span>
                   {message.route && <span className="text-[10px] text-neutral-500">{message.route} route</span>}
                   {message.anomalySignal && message.anomalySignal !== "none" && (
@@ -360,7 +363,7 @@ export function AgentChat() {
               <div className="space-y-1">
                 <div className="text-sm font-medium text-white">Payment challenge pending</div>
                 <div className="text-xs text-neutral-400">
-                  {pendingPayment.challenge.payment_network} • ${pendingPayment.challenge.price_usdc.toFixed(3)} USDC
+                  {pendingPayment.challenge.payment_network} • {formatUsdc(pendingPayment.challenge.price_usdc)}
                 </div>
                 <div className="text-xs text-neutral-500 font-mono break-all">
                   {pendingPayment.challenge.payment_challenge_token}
