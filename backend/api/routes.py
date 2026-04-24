@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
@@ -43,6 +44,42 @@ class BondOperationError(RuntimeError):
 
 def _http_error(status_code: int, code: str, message: str) -> HTTPException:
     return HTTPException(status_code=status_code, detail={"code": code, "message": message})
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_positive_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    if value <= 0:
+        return default
+    return value
+
+
+def _auto_slash_config() -> dict[str, bool | float | str]:
+    return {
+        "enabled": _env_bool("AUTO_SLASH_ON_FLAGGED", True),
+        "victim_address": (
+            os.getenv("AUTO_SLASH_VICTIM_ADDRESS")
+            or os.getenv("VICTIM_WALLET_ADDRESS")
+            or ""
+        ),
+        "payout_usdc": _env_positive_float(
+            "AUTO_SLASH_PAYOUT_USDC",
+            _env_positive_float("SLASH_PAYOUT_USDC", 1.0),
+        ),
+        "min_payout_usdc": _env_positive_float("AUTO_SLASH_MIN_PAYOUT_USDC", 0.01),
+    }
 
 
 def _utcnow(request: Request) -> datetime:
@@ -107,6 +144,7 @@ async def post_agent_chat(request: Request, payload: ChatRequest) -> ChatRespons
                 "timestamp": response.timestamp,
             },
         )
+        await _auto_slash_if_flagged(request, response)
 
     return response
 
@@ -128,6 +166,82 @@ def _perform_bond_slash(victim_address: str, payout_amount: float, timestamp: da
     )
 
 
+async def _emit_bond_slashed_event(
+    request: Request,
+    *,
+    victim_address: str,
+    response: SlashResponse,
+) -> None:
+    event = TransactionRecord(
+        type="bond_slashed",
+        amount=response.payout,
+        timestamp=response.timestamp,
+        tx_hash=response.tx_hash,
+        victim_address=victim_address,
+    )
+    request.app.state.event_store.add_event(event.model_dump())
+
+    await request.app.state.websocket_manager.broadcast(
+        "bond_slashed",
+        {
+            "payout": response.payout,
+            "new_balance": response.new_balance,
+            "tx_hash": response.tx_hash,
+            "victim_address": victim_address,
+            "timestamp": response.timestamp,
+        },
+    )
+
+
+async def _auto_slash_if_flagged(request: Request, response: ChatResponse) -> None:
+    if not response.flagged:
+        return
+
+    cfg = _auto_slash_config()
+    if not bool(cfg["enabled"]):
+        return
+
+    victim_address = str(cfg["victim_address"])
+    if not victim_address:
+        logger.warning("AUTO_SLASH_ON_FLAGGED is enabled but no victim address is configured")
+        return
+
+    requested_payout = float(cfg["payout_usdc"])
+    min_payout = float(cfg["min_payout_usdc"])
+    available_bond = max(float(response.bond_balance), 0.0)
+    payout = min(requested_payout, available_bond)
+    if payout < min_payout:
+        logger.info(
+            "Skipping auto slash: payout below minimum threshold "
+            "(payout=%s min=%s available=%s)",
+            payout,
+            min_payout,
+            available_bond,
+        )
+        return
+
+    try:
+        slash_response = await run_in_threadpool(
+            _perform_bond_slash,
+            victim_address=victim_address,
+            payout_amount=payout,
+            timestamp=_utcnow(request),
+        )
+    except BondOperationError:
+        logger.exception("Auto slash failed for flagged response")
+        return
+    except Exception:
+        logger.exception("Unexpected auto slash failure")
+        return
+
+    await _emit_bond_slashed_event(
+        request,
+        victim_address=victim_address,
+        response=slash_response,
+    )
+    response.bond_balance = slash_response.new_balance
+
+
 @router.post("/bond/slash", response_model=SlashResponse)
 async def post_bond_slash(request: Request, payload: SlashRequest) -> SlashResponse:
     try:
@@ -144,24 +258,10 @@ async def post_bond_slash(request: Request, payload: SlashRequest) -> SlashRespo
         logger.exception("Unexpected bond slash failure")
         raise _http_error(500, "internal_error", "Unexpected server error") from exc
 
-    event = TransactionRecord(
-        type="bond_slashed",
-        amount=response.payout,
-        timestamp=response.timestamp,
-        tx_hash=response.tx_hash,
+    await _emit_bond_slashed_event(
+        request,
         victim_address=payload.victim_address,
-    )
-    request.app.state.event_store.add_event(event.model_dump())
-
-    await request.app.state.websocket_manager.broadcast(
-        "bond_slashed",
-        {
-            "payout": response.payout,
-            "new_balance": response.new_balance,
-            "tx_hash": response.tx_hash,
-            "victim_address": payload.victim_address,
-            "timestamp": response.timestamp,
-        },
+        response=response,
     )
     return response
 

@@ -2,10 +2,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const ARC_EXPLORER_TX_BASE_URL =
   process.env.NEXT_PUBLIC_ARC_EXPLORER_TX_BASE_URL || "https://explorer.arc.io/tx";
 
-const parsedSlashPayout = Number(process.env.NEXT_PUBLIC_SLASH_PAYOUT_USDC ?? "1.0");
-export const DEFAULT_SLASH_PAYOUT_USDC =
-  Number.isFinite(parsedSlashPayout) && parsedSlashPayout > 0 ? parsedSlashPayout : 1.0;
-
 export type ChatResponse = {
   reply: string;
   model: string;
@@ -94,7 +90,7 @@ export async function slashBond(): Promise<{ success: boolean; hash: string }> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       victim_address: "0x191cc4e34e54444b9e10f4e3311c87382b0c0654", // Demo victim address
-      payout_amount: DEFAULT_SLASH_PAYOUT_USDC,
+      payout_amount: 500.0,
     }),
   });
 

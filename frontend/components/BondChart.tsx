@@ -9,27 +9,17 @@ export function BondChart() {
 
   const data = useMemo(() => {
     const now = new Date();
-    const initialBond = Number(process.env.NEXT_PUBLIC_INITIAL_BOND_USDC ?? "1.0");
-    const startBalance = Math.max(
-      currentBalance,
-      Number.isFinite(initialBond) && initialBond > 0 ? initialBond : 1.0,
-    );
-    const step = (startBalance - currentBalance) / 6;
+    const step = (10000 - currentBalance) / 6;
 
     return Array.from({ length: 7 }, (_, index) => {
       const pointTime = new Date(now.getTime() - (6 - index) * 60000);
-      const value =
-        index === 6
-          ? currentBalance
-          : Math.max(currentBalance, Number((startBalance - step * index).toFixed(4)));
+      const value = index === 6 ? currentBalance : Math.max(currentBalance, Math.round(10000 - step * index));
       return {
         time: pointTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         value,
       };
     });
   }, [currentBalance]);
-
-  const yMax = Math.max(1, Number((Math.max(...data.map((row) => row.value)) * 1.1).toFixed(4)));
 
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 h-[200px] flex flex-col">
@@ -48,7 +38,7 @@ export function BondChart() {
               hide 
             />
             <YAxis 
-              domain={[0, yMax]} 
+              domain={[0, 10000]} 
               hide 
             />
             <Tooltip 

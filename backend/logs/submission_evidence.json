@@ -1,0 +1,52 @@
+{
+  "generated_at": "2026-04-24T10:54:31.766637+00:00",
+  "inputs": {
+    "transactions_path": "C:\\Users\\USER\\OneDrive - Strathmore University\\Documents\\agent_indemnity\\backend\\logs\\demo_transactions.json",
+    "load_results_path": "C:\\Users\\USER\\OneDrive - Strathmore University\\Documents\\agent_indemnity\\backend\\logs\\load_test_results.json"
+  },
+  "criteria": {
+    "per_action_pricing_leq_0_01": {
+      "pass": true
+    },
+    "transaction_frequency_50_plus": {
+      "pass": false
+    },
+    "onchain_slash_proof": {
+      "pass": false
+    },
+    "traditional_cost_margin_gap": {
+      "pass": true
+    }
+  },
+  "stats": {
+    "total_requests": 41,
+    "settled_requests": 40,
+    "flagged_requests": 10,
+    "price_min_usdc": 0.001,
+    "price_max_usdc": 0.01,
+    "price_avg_usdc": 0.003244,
+    "total_volume_usdc": 0.133,
+    "avg_latency_ms": 14164,
+    "route_counts": {
+      "general": 19,
+      "technical": 8,
+      "legal_risk": 10,
+      "fallback_complex": 4
+    },
+    "model_counts": {
+      "Qwen/Qwen3-0.6B": 37,
+      "gemini-3.1-pro-preview": 4
+    }
+  },
+  "slash_proof": {
+    "tx_hash": null,
+    "explorer_url": null
+  },
+  "pricing_economics": {
+    "average_price_usdc": 0.003244,
+    "traditional_cost_low_usdc": 0.02,
+    "traditional_cost_high_usdc": 0.2,
+    "avg_margin_at_low_cost_usdc": -0.016756,
+    "avg_margin_at_high_cost_usdc": -0.196756
+  }
+}

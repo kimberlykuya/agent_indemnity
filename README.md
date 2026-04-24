@@ -10,30 +10,13 @@ Rather than traditional insurance, it acts as a **programmable performance bond*
 - **Smart Model Routing**: Routes requests to cost-efficient specialist models (via Featherless) or deep reasoning fallback (Gemini 3 Flash/Pro).
 - **On-chain Settlement**: USDC-backed bond enforcement via Arc smart contracts.
 
-## Hackathon Acceptance Mapping
+## Auto Slash on Flagged Responses
 
-- Real per-action pricing <= $0.01: implemented via route pricing in backend request handling.
-- 50+ transaction frequency proof: produced by `backend/scripts/load_test.py`.
-- Margin explanation against traditional costs: shown in dashboard `MarginTable` and generated evidence report.
-- Arc on-chain slashing proof: produced by `/bond/slash` and captured in load test summary.
+Flagged chat responses can trigger automatic on-chain slashing from the chat endpoint.
 
-## Generate Submission Evidence (After Load Test)
+- `AUTO_SLASH_ON_FLAGGED=true` enables auto slash.
+- `AUTO_SLASH_VICTIM_ADDRESS` sets payout recipient (falls back to `VICTIM_WALLET_ADDRESS`).
+- `AUTO_SLASH_PAYOUT_USDC=1.0` sets target slash amount.
+- `AUTO_SLASH_MIN_PAYOUT_USDC=0.01` avoids dust-sized transactions.
 
-1. Run your load test (65 requests + slash):
-   - `python backend/scripts/load_test.py`
-   - Optional: set env var `SLASH_PAYOUT_USDC=1.0` (or any value your bond can cover)
-   - Default demo bond config is `$1.00` via `NEXT_PUBLIC_INITIAL_BOND_USDC=1.0`
-2. Generate judge-ready artifacts:
-   - `python backend/scripts/generate_submission_evidence.py`
-3. Submit these artifacts:
-   - `backend/logs/demo_transactions.json`
-   - `backend/logs/load_test_results.json`
-   - `backend/logs/submission_evidence.json`
-   - `backend/logs/submission_evidence.md`
-
-The evidence generator computes:
-- Pass/fail for each required criterion
-- Request count, settled count, route mix, model mix, latency
-- Pricing min/max/average
-- Slash tx hash + Arc explorer URL (if present in load test results)
-- Explicit margin gap under traditional per-action settlement assumptions
+If the available bond is lower than the configured payout, the backend clamps slash amount to available bond.

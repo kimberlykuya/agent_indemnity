@@ -1,6 +1,5 @@
 import asyncio
 import json
-import os
 import pathlib
 import time
 import httpx
@@ -8,7 +7,6 @@ import httpx
 _LOG_FILE = pathlib.Path(__file__).parent.parent / "logs" / "demo_transactions.json"
 _SUMMARY_FILE = pathlib.Path(__file__).parent.parent / "logs" / "load_test_results.json"
 API_URL = "http://localhost:8000"
-DEFAULT_SLASH_PAYOUT_USDC = float(os.getenv("SLASH_PAYOUT_USDC", "1.0"))
 
 BASE_PROMPTS = [
     {"message": "What are your business hours?", "user_id": "demo-user"},
@@ -55,14 +53,11 @@ async def _send_chat(client: httpx.AsyncClient, idx: int, prompt: dict):
 
 async def _send_slash(client: httpx.AsyncClient):
     try:
-        # Keep slash amount conservative by default so the transaction can succeed
-        # even on smaller demo bond balances.
-        slash_amount = max(DEFAULT_SLASH_PAYOUT_USDC, 0.01)
         resp = await client.post(
             f"{API_URL}/bond/slash",
             json={
                 "victim_address": "0x191cc4e34e54444b9e10f4e3311c87382b0c0654",
-                "payout_amount": slash_amount,
+                "payout_amount": 500.0,
             },
             timeout=60.0,
         )
