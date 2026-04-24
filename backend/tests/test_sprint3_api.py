@@ -74,9 +74,11 @@ def test_chat_request_returns_normalized_response(client: TestClient, sample_cha
     assert response.status_code == 200
     body = response.json()
     assert set(body) == {
+        "anomaly_reason",
         "reply",
         "model",
         "route_category",
+        "route_confidence",
         "price_usdc",
         "payment_status",
         "bond_balance",
@@ -111,6 +113,7 @@ def test_chat_request_persists_transaction_event(client: TestClient, sample_chat
     assert newest["amount"] == chat_response.json()["price_usdc"]
     assert newest["payment_ref"] == "pay_123"
     assert newest["status"] == "authorized"
+    assert newest["bond_balance_after"] == chat_response.json()["bond_balance"]
 
 
 def test_chat_request_emits_websocket_event(client: TestClient, sample_chat_response: ChatResponse):
@@ -188,6 +191,7 @@ def test_bond_slash_persists_transaction_event(client: TestClient, monkeypatch: 
     assert newest["type"] == "bond_slashed"
     assert newest["amount"] == 5.0
     assert newest["tx_hash"] == "0x123"
+    assert newest["bond_balance_after"] == 45.0
 
 
 def test_bond_slash_emits_websocket_event(client: TestClient, monkeypatch: pytest.MonkeyPatch):
@@ -376,6 +380,21 @@ def test_bond_status_returns_expected_shape(client: TestClient, monkeypatch: pyt
     }
 
 
+def test_bond_status_returns_503_when_onchain_read_fails(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    def raise_failure() -> float:
+        raise RuntimeError("rpc unavailable")
+
+    monkeypatch.setattr("backend.api.routes.get_bond_balance", raise_failure)
+
+    response = client.get("/bond/status")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == {
+        "code": "bond_status_failed",
+        "message": "Unable to read on-chain bond balance",
+    }
+
+
 def test_transactions_are_sorted_newest_first(client: TestClient):
     client.app.state.event_store.add_event( # type: ignore
         {
@@ -418,6 +437,7 @@ def test_transactions_include_normalized_request_and_bond_fields(client: TestCli
             "status": "authorized",
             "payment_ref": "pay_123",
             "flagged": True,
+            "bond_balance_after": 49.0,
         }
     )
     client.app.state.event_store.add_event( # type: ignore
@@ -427,6 +447,7 @@ def test_transactions_include_normalized_request_and_bond_fields(client: TestCli
             "timestamp": FIXED_SLASH_TIME,
             "tx_hash": "0x123",
             "victim_address": "0xabc123",
+            "bond_balance_after": 45.0,
         }
     )
 
@@ -436,10 +457,12 @@ def test_transactions_include_normalized_request_and_bond_fields(client: TestCli
     bond_event, request_event = response.json()
     assert bond_event["type"] == "bond_slashed"
     assert bond_event["tx_hash"] == "0x123"
+    assert bond_event["bond_balance_after"] == 45.0
     assert request_event["type"] == "request_paid"
     assert request_event["route_category"] == "technical"
     assert request_event["payment_ref"] == "pay_123"
     assert request_event["flagged"] is True
+    assert request_event["bond_balance_after"] == 49.0
 
 
 def test_route_metrics_are_computed_correctly(client: TestClient):

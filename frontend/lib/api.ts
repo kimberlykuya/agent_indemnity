@@ -20,6 +20,7 @@ export type TransactionRecord = {
   type: "request_paid" | "bond_slashed" | "bond_topped_up" | "anomaly_flagged";
   amount: number;
   timestamp: string;
+  bond_balance_after?: number | null;
   model?: string | null;
   route_category?: string | null;
   status?: string | null;
@@ -90,7 +91,7 @@ export async function slashBond(): Promise<{ success: boolean; hash: string }> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       victim_address: "0x191cc4e34e54444b9e10f4e3311c87382b0c0654", // Demo victim address
-      payout_amount: 500.0,
+      payout_amount: 0.01,
     }),
   });
 

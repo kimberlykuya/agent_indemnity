@@ -154,6 +154,7 @@ class TransactionRecord(APIModel):
     type: EventName
     amount: float
     timestamp: datetime
+    bond_balance_after: float | None = None
     model: str | None = None
     route_category: PublicRouteCategory | None = None
     status: SettlementStatus | None = None
@@ -166,6 +167,13 @@ class TransactionRecord(APIModel):
     @classmethod
     def validate_amount(cls, value: float) -> float:
         return _require_non_negative_finite(value, "amount")
+
+    @field_validator("bond_balance_after")
+    @classmethod
+    def validate_optional_balance(cls, value: float | None) -> float | None:
+        if value is None:
+            return None
+        return _require_non_negative_finite(value, "bond_balance_after")
 
 
 class RouteMetricsResponse(APIModel):

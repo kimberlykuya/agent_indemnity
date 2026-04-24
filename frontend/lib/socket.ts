@@ -22,6 +22,7 @@ export function connectSocket() {
           type: "request_paid",
           amount: data.amount,
           timestamp: data.timestamp,
+          bond_balance_after: data.bond_balance,
           model: data.model,
           route_category: data.route_category,
           status: data.payment_status,
@@ -37,6 +38,7 @@ export function connectSocket() {
           type: "bond_slashed",
           amount: data.payout,
           timestamp: data.timestamp,
+          bond_balance_after: data.new_balance,
           tx_hash: data.tx_hash,
           victim_address: data.victim_address,
         });

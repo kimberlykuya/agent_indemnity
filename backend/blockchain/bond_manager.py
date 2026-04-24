@@ -73,7 +73,7 @@ def _demo_initial_bond_balance_usdc() -> float:
 
 
 def _shadow_fallback_enabled() -> bool:
-    return _env_bool("DEMO_BOND_FALLBACK", True)
+    return _env_bool("DEMO_BOND_FALLBACK", False)
 
 
 def _looks_like_terminal_contract_state(exc: Exception) -> bool:
@@ -133,18 +133,16 @@ def _set_shadow_balance(value: float) -> None:
 
 
 def get_bond_balance() -> float:
-    """Return on-chain bond balance in USDC (6 decimal places → float).
+    """Return the on-chain bond balance in USDC.
 
-    Returns 0.0 and logs a warning if the contract is unreachable.
+    This is strict real-chain mode by default. If the contract is unreachable
+    or the call fails, the exception is propagated instead of fabricating a
+    fallback balance.
     """
     if _SHADOW_MODE_ACTIVE:
         return _shadow_balance()
 
-    try:
-        return _read_onchain_bond_balance()
-    except Exception as exc:
-        logger.warning({"error": str(exc)}, "get_bond_balance failed")
-        return 0.0
+    return _read_onchain_bond_balance()
 
 
 def pay_premium(amount_usdc: float) -> str:

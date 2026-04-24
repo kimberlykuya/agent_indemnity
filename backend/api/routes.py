@@ -74,6 +74,7 @@ async def post_agent_chat(request: Request, payload: ChatRequest) -> ChatRespons
         type="request_paid",
         amount=response.price_usdc,
         timestamp=response.timestamp,
+        bond_balance_after=response.bond_balance,
         model=response.model,
         route_category=response.route_category,
         status=response.payment_status,
@@ -147,6 +148,7 @@ async def _emit_bond_slashed_event(
         type="bond_slashed",
         amount=response.payout,
         timestamp=response.timestamp,
+        bond_balance_after=response.new_balance,
         tx_hash=response.tx_hash,
         victim_address=victim_address,
     )
@@ -190,7 +192,11 @@ async def post_bond_slash(request: Request, payload: SlashRequest) -> SlashRespo
 
 @router.get("/bond/status", response_model=BondStatusResponse)
 async def get_bond_status(request: Request) -> BondStatusResponse:
-    balance = await run_in_threadpool(get_bond_balance)
+    try:
+        balance = await run_in_threadpool(get_bond_balance)
+    except Exception as exc:
+        logger.exception("Bond status read failed")
+        raise _http_error(503, "bond_status_failed", "Unable to read on-chain bond balance") from exc
     return BondStatusResponse(
         balance=balance,
         state="ACTIVE" if balance > 0 else "DEPLETED",
