@@ -31,7 +31,8 @@ export function BondBalance() {
     }
   };
 
-  const isHealthy = balance > 0.01;
+  const hasBalance = balance !== null;
+  const isHealthy = hasBalance && balance > 0.01;
 
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 flex flex-col justify-between h-[200px]">
@@ -39,23 +40,27 @@ export function BondBalance() {
         <div className="space-y-1">
           <h2 className="text-neutral-400 text-sm font-medium">Performance Bond</h2>
           <div className="text-4xl font-bold font-mono tracking-tight text-white">
-            ${balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            {hasBalance
+              ? `$${balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+              : "--"}
           </div>
           <div className="text-xs text-neutral-500 font-mono">Arc Network USDC</div>
         </div>
         
         <div className={cn(
           "px-3 py-1.5 rounded-full flex items-center gap-2 text-xs font-medium",
-          isHealthy ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-red-500/10 text-red-400 border border-red-500/20"
+          hasBalance && isHealthy
+            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+            : "bg-red-500/10 text-red-400 border border-red-500/20"
         )}>
-          {isHealthy ? <ShieldCheck className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-          {isHealthy ? "Healthy" : "At Risk"}
+          {hasBalance && isHealthy ? <ShieldCheck className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+          {hasBalance ? (isHealthy ? "Healthy" : "At Risk") : "Loading"}
         </div>
       </div>
 
       <button
         onClick={handleSlash}
-        disabled={isSlashing || balance === 0}
+        disabled={isSlashing || !hasBalance || balance === 0}
         className="w-full mt-4 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-lg font-medium transition-colors focus:ring-2 ring-red-500/50 outline-none"
       >
         <ShieldAlert className="w-4 h-4" />

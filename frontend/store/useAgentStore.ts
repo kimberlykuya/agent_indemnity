@@ -7,7 +7,7 @@ export type Transaction = TransactionRecord & {
 
 interface AgentState {
   transactions: Transaction[];
-  bondBalance: number;
+  bondBalance: number | null;
   anomaliesCount: number;
   routeCounts: Record<string, number>;
   setTransactions: (transactions: TransactionRecord[]) => void;
@@ -16,11 +16,9 @@ interface AgentState {
   setBondBalance: (balance: number) => void;
 }
 
-const INITIAL_BOND = 10000;
-
 export const useAgentStore = create<AgentState>((set) => ({
   transactions: [],
-  bondBalance: INITIAL_BOND,
+  bondBalance: null,
   anomaliesCount: 0,
   routeCounts: {
     general: 0,
@@ -91,7 +89,7 @@ export const useAgentStore = create<AgentState>((set) => ({
   }),
 
   slashBond: (amount) => set((state) => ({
-    bondBalance: Math.max(0, state.bondBalance - amount),
+    bondBalance: state.bondBalance === null ? null : Math.max(0, state.bondBalance - amount),
   })),
 
   setBondBalance: (balance) => set({ bondBalance: balance }),
