@@ -2,10 +2,10 @@ import asyncio
 import json
 import pathlib
 import time
-from datetime import datetime, timezone
 import httpx
 
 _LOG_FILE = pathlib.Path(__file__).parent.parent / "logs" / "demo_transactions.json"
+_SUMMARY_FILE = pathlib.Path(__file__).parent.parent / "logs" / "load_test_results.json"
 API_URL = "http://localhost:8000"
 
 BASE_PROMPTS = [
@@ -50,6 +50,7 @@ async def _send_slash(client: httpx.AsyncClient):
 
 async def main():
     _LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _LOG_FILE.write_text("[]")
     
     # Generate 65 total prompts
     prompts = [BASE_PROMPTS[i % len(BASE_PROMPTS)] for i in range(65)]
@@ -100,11 +101,12 @@ async def main():
     print(f"  Total prompts : {len(prompts)}")
     print(f"  Flagged       : {flagged}")
     print(f"  Total cost    : ${total_cost:.4f} USDC")
-    print(f"  Log           : {_LOG_FILE}")
+    print(f"  Transactions  : {_LOG_FILE}")
+    print(f"  Summary       : {_SUMMARY_FILE}")
     print(f"{'-'*70}\n")
 
-    _LOG_FILE.write_text(json.dumps(results, indent=2))
-    print("OK: demo_transactions.json written.\n")
+    _SUMMARY_FILE.write_text(json.dumps(results, indent=2))
+    print("OK: load_test_results.json written.\n")
 
 if __name__ == "__main__":
     asyncio.run(main())

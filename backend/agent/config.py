@@ -85,3 +85,14 @@ def validate_config() -> None:
             f"Missing required environment variables: {', '.join(missing)}. "
             "Copy .env.example to .env and fill in the values."
         )
+
+
+def get_model_config() -> dict[str, str]:
+    """Return the currently loaded provider/model configuration."""
+    return {
+        "featherless_general_model": FEATHERLESS_GENERAL_MODEL,
+        "featherless_tech_model": FEATHERLESS_TECH_MODEL,
+        "featherless_legal_model": FEATHERLESS_LEGAL_MODEL,
+        "gemini_router_model": GEMINI_ROUTER_MODEL,
+        "gemini_fallback_model": GEMINI_FALLBACK_MODEL,
+    }

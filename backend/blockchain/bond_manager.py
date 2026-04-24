@@ -89,12 +89,12 @@ def pay_premium(amount_usdc: float) -> str:
             }
         )
         signed_tx = w3.eth.account.sign_transaction(tx, private_key=DEPLOYER_PRIVATE_KEY)
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)  # type: ignore[attr-defined]
+        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
         hex_hash = tx_hash.hex()
-        logger.info({"amount": amount_usdc, "tx_hash": hex_hash}, "pay_premium executed on-chain")
+        logger.info("pay_premium executed on-chain: amount=%s tx_hash=%s", amount_usdc, hex_hash)
         return hex_hash
     except Exception as exc:
-        logger.error({"error": str(exc), "amount": amount_usdc}, "Failed to execute topUpBond transaction")
+        logger.error("Failed to execute topUpBond transaction: amount=%s error=%s", amount_usdc, exc)
         raise
 
 
@@ -120,11 +120,16 @@ def slash_bond(victim_address: str, payout_amount_usdc: float) -> str:
         })
         
         signed_tx = w3.eth.account.sign_transaction(tx, private_key=DEPLOYER_PRIVATE_KEY)
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction) # type: ignore
+        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
         
         hex_hash = tx_hash.hex()
-        logger.info({"victim": victim_address, "amount": payout_amount_usdc, "tx_hash": hex_hash}, "slash_bond executed on-chain")
+        logger.info(
+            "slash_bond executed on-chain: victim=%s amount=%s tx_hash=%s",
+            victim_address,
+            payout_amount_usdc,
+            hex_hash,
+        )
         return hex_hash
     except Exception as e:
-        logger.error({"error": str(e)}, "Failed to execute slashBond transaction")
+        logger.error("Failed to execute slashBond transaction: victim=%s amount=%s error=%s", victim_address, payout_amount_usdc, e)
         raise

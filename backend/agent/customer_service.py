@@ -51,10 +51,22 @@ _ROUTE_CONFIG: dict[str, tuple[str, str]] = {
 def _generate_reply(route: str, message: str) -> tuple[str, str]:
     """Return (reply_text, model_id). Raises ModelClientError on failure."""
     if route == config.FALLBACK_COMPLEX:
+        logger.info("Generating reply via Gemini fallback model=%s", config.GEMINI_FALLBACK_MODEL)
         return call_gemini_fallback(message), config.GEMINI_FALLBACK_MODEL
 
     system_prompt, model_id = _ROUTE_CONFIG[route]
-    return call_featherless(model_id, system_prompt, message), model_id
+    logger.info("Generating reply via Featherless route=%s model=%s", route, model_id)
+    try:
+        return call_featherless(model_id, system_prompt, message), model_id
+    except ModelClientError as exc:
+        logger.warning(
+            "Featherless failed for route=%s model=%s; falling back to Gemini model=%s error=%s",
+            route,
+            model_id,
+            config.GEMINI_FALLBACK_MODEL,
+            exc,
+        )
+        return call_gemini_fallback(message), config.GEMINI_FALLBACK_MODEL
 
 
 def _append_to_log(record: dict) -> None:

@@ -68,8 +68,8 @@ def rules_route(message: str) -> dict:
         }
     return {
         "route": config.GENERAL,
-        "confidence": 0.70,
-        "reason": "no domain keywords matched",
+        "confidence": 0.90,
+        "reason": "no domain keywords matched; defaulting to general",
     }
 
 

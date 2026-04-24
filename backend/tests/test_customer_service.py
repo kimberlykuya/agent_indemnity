@@ -71,6 +71,20 @@ class TestHandleRequest:
         assert result["payment_status"] == "provider_error"
         assert result["reply"] != ""  # error message returned
 
+    def test_featherless_failure_falls_back_to_gemini(self):
+        from agent.model_clients import ModelClientError
+        with patch("agent.customer_service.call_featherless",
+                   side_effect=ModelClientError("timeout")):
+            with patch("agent.customer_service.call_gemini_fallback",
+                       return_value="Gemini fallback reply") as gemini_mock:
+                with patch("agent.customer_service.pay_premium", return_value="0xpremium"):
+                    with patch("agent.customer_service._append_to_log"):
+                        result = handle_request("What are your hours?")
+        assert gemini_mock.called
+        assert result["reply"] == "Gemini fallback reply"
+        assert result["model"] == config.GEMINI_FALLBACK_MODEL
+        assert result["payment_status"] == "settled"
+
     def test_successful_payment_includes_tx_hash(self):
         result = self._run("What are your business hours?")
         assert result["payment_status"] == "settled"
@@ -80,6 +94,16 @@ class TestHandleRequest:
         result = self._run("Hello")
         assert isinstance(result["latency_ms"], int)
         assert result["latency_ms"] >= 0
+
+    def test_plain_general_prompt_does_not_require_gemini_router(self):
+        fl, gm = _patch_provider()
+        with fl, gm, \
+             patch("agent.router.call_gemini_router") as router_mock, \
+             patch("agent.customer_service.pay_premium", return_value="0xpremium"), \
+             patch("agent.customer_service._append_to_log"):
+            result = handle_request("What are your business hours?", "u")
+        assert not router_mock.called
+        assert result["route_category"] == config.GENERAL
 
     def test_log_entry_written(self, tmp_path):
         log_file = tmp_path / "demo_transactions.json"

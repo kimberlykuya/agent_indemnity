@@ -1,0 +1,30 @@
+[
+  {
+    "reply": "I am available for business hours during regular business days. Typically, we operate from 9:00 AM to 5:00 PM. If you have specific questions or need further assistance, feel free to ask!",
+    "model": "Qwen/Qwen3-0.6B",
+    "route_category": "general",
+    "route_confidence": 0.9,
+    "price_usdc": 0.001,
+    "payment_status": "settled",
+    "payment_ref": "290d9196f1d84eec804be59ed8882f12460509085e9671fc6da068f024f77bbb",
+    "flagged": false,
+    "anomaly_reason": null,
+    "latency_ms": 12189,
+    "user_id": "demo-user",
+    "message": "What are your business hours?"
+  },
+  {
+    "reply": "To reset your password, check your email or a secure website (like Google Password Manager or an online service). Enter your current password and follow the instructions to reset it. If you're using a mobile app, ensure it's set up correctly. Let me know if you need further assistance!",
+    "model": "Qwen/Qwen3-0.6B",
+    "route_category": "general",
+    "route_confidence": 0.9,
+    "price_usdc": 0.001,
+    "payment_status": "settled",
+    "payment_ref": "fe7f1d13b03eb8f5d6d18cc281bf2cb7542bc0204aee5019c9bb58f0d6f6230c",
+    "flagged": false,
+    "anomaly_reason": null,
+    "latency_ms": 11427,
+    "user_id": "demo-user",
+    "message": "How do I reset my password?"
+  }
+]

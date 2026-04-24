@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.concurrency import run_in_threadpool
 
 from .schemas import (
     AnomalyMetricsResponse,
@@ -59,7 +60,8 @@ async def get_health() -> HealthResponse:
 @router.post("/agent/chat", response_model=ChatResponse)
 async def post_agent_chat(request: Request, payload: ChatRequest) -> ChatResponse:
     try:
-        response = request.app.state.chat_service.process_message(
+        response = await run_in_threadpool(
+            request.app.state.chat_service.process_message,
             message=payload.message,
             user_id=payload.user_id,
         )
@@ -129,7 +131,8 @@ def _perform_bond_slash(victim_address: str, payout_amount: float, timestamp: da
 @router.post("/bond/slash", response_model=SlashResponse)
 async def post_bond_slash(request: Request, payload: SlashRequest) -> SlashResponse:
     try:
-        response = _perform_bond_slash(
+        response = await run_in_threadpool(
+            _perform_bond_slash,
             victim_address=payload.victim_address,
             payout_amount=payload.payout_amount,
             timestamp=_utcnow(request),
@@ -165,7 +168,7 @@ async def post_bond_slash(request: Request, payload: SlashRequest) -> SlashRespo
 
 @router.get("/bond/status", response_model=BondStatusResponse)
 async def get_bond_status(request: Request) -> BondStatusResponse:
-    balance = get_bond_balance()
+    balance = await run_in_threadpool(get_bond_balance)
     return BondStatusResponse(
         balance=balance,
         state="ACTIVE" if balance > 0 else "DEPLETED",

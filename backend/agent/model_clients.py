@@ -53,6 +53,7 @@ def call_featherless(model: str, system_prompt: str, user_message: str) -> str:
     client = _get_featherless()
     t0 = time.monotonic()
     try:
+        logger.info("Calling Featherless model=%s base_url=%s", model, _FEATHERLESS_BASE)
         response = client.chat.completions.create(
             model=model,
             messages=[
@@ -91,6 +92,7 @@ def call_gemini_router(user_message: str, system_prompt: str) -> str:
     client = _get_gemini()
     t0 = time.monotonic()
     try:
+        logger.info("Calling Gemini router model=%s", config.GEMINI_ROUTER_MODEL)
         response = client.models.generate_content(
             model=config.GEMINI_ROUTER_MODEL,
             contents=user_message,
@@ -112,6 +114,7 @@ def call_gemini_fallback(user_message: str) -> str:
     client = _get_gemini()
     t0 = time.monotonic()
     try:
+        logger.info("Calling Gemini fallback model=%s", config.GEMINI_FALLBACK_MODEL)
         response = client.models.generate_content(
             model=config.GEMINI_FALLBACK_MODEL,
             contents=user_message,
