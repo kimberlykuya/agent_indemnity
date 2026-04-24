@@ -62,7 +62,7 @@ def call_featherless(model: str, system_prompt: str, user_message: str) -> str:
             ],
             extra_headers={
                 "HTTP-Referer": "https://agentindemnity.io",
-                "X-Title":      "AgentIndemnity",
+                "X-Title":      "Agent Indemnity",
             },
         )
         latency = int((time.monotonic() - t0) * 1000)

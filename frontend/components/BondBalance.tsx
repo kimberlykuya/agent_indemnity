@@ -1,7 +1,7 @@
 "use client";
 
 import { useAgentStore } from "../store/useAgentStore";
-import { slashBond } from "../lib/api";
+import { DEFAULT_SLASH_PAYOUT_USDC, slashBond } from "../lib/api";
 import { ShieldAlert, TrendingDown, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { cn } from "../lib/utils";
 export function BondBalance() {
   const balance = useAgentStore((state) => state.bondBalance);
   const [isSlashing, setIsSlashing] = useState(false);
+  const minHealthyBond = Number(process.env.NEXT_PUBLIC_MIN_HEALTHY_BOND_USDC ?? "1.0");
 
   const handleSlash = async () => {
     setIsSlashing(true);
@@ -31,7 +32,7 @@ export function BondBalance() {
     }
   };
 
-  const isHealthy = balance > 5000;
+  const isHealthy = Number.isFinite(minHealthyBond) ? balance >= minHealthyBond : balance > 0;
 
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 flex flex-col justify-between h-[200px]">
@@ -59,7 +60,9 @@ export function BondBalance() {
         className="w-full mt-4 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-lg font-medium transition-colors focus:ring-2 ring-red-500/50 outline-none"
       >
         <ShieldAlert className="w-4 h-4" />
-        {isSlashing ? "Executing Manual Slash..." : "Manual Slash Bond ($500)"}
+        {isSlashing
+          ? "Executing Manual Slash..."
+          : `Manual Slash Bond ($${DEFAULT_SLASH_PAYOUT_USDC.toFixed(2)})`}
       </button>
     </div>
   );

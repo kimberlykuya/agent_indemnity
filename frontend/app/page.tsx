@@ -66,7 +66,7 @@ export default function ComplianceDashboard() {
           <div>
             <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
               <ShieldAlert className="w-6 h-6 text-emerald-500" />
-              AgentIndemnity
+              Agent Indemnity
             </h1>
             <p className="text-neutral-500 text-sm mt-1">Compliance & Economics Dashboard</p>
           </div>

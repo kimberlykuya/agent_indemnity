@@ -1,6 +1,6 @@
-# AgentIndemnity — Revised 2-Day Sprint Implementation Plan (April 2026)
+# Agent Indemnity — Revised 2-Day Sprint Implementation Plan (April 2026)
 
-**Project:** AgentIndemnity — Per-Action AI Performance Bond Infrastructure
+**Project:** Agent Indemnity — Per-Action AI Performance Bond Infrastructure
 **Stack:** Python (FastAPI backend) + Next.js (frontend dashboard)
 **Submission Deadline:** April 25, 2026, 03:00 AM EAT
 **Start Time:** April 23, 2026, 08:00 AM EAT
@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-AgentIndemnity instruments deployed AI agents with a USDC-backed performance bond on Arc. Every outbound agent action incurs a sub-cent usage charge that is authorized per request through Circle Gateway Nanopayments and later settled on Arc. A configurable anomaly trigger slashes the bond and releases USDC directly to the affected party — no claims process, no human adjudication delay.
+Agent Indemnity instruments deployed AI agents with a USDC-backed performance bond on Arc. Every outbound agent action incurs a sub-cent usage charge that is authorized per request through Circle Gateway Nanopayments and later settled on Arc. A configurable anomaly trigger slashes the bond and releases USDC directly to the affected party — no claims process, no human adjudication delay.
 
 The reframe is critical: this is **not insurance**. It is a programmable performance bond with automated slashing, similar in logic to validator slashing in blockchain systems. The product combines:
 
@@ -74,7 +74,7 @@ This architecture keeps the original product idea intact while aligning it with 
 ## Repository Structure
 
 ```text
-agentindemnity/
+agent_indemnity/
 ├── backend/
 │   ├── main.py
 │   ├── agent/
@@ -478,7 +478,7 @@ For this revised architecture, proof should include:
 ```text
 0:00–0:20 — Problem statement
   "Every deployed AI agent is a liability. When it goes wrong, companies face
-   slow claims processes and reputational damage. AgentIndemnity turns agent
+   slow claims processes and reputational damage. Agent Indemnity turns agent
    accountability into a programmable performance bond."
 
 0:20–0:50 — Developer view
@@ -596,7 +596,7 @@ For this revised architecture, proof should include:
 
 ## Judging Criteria Mapping
 
-| Criterion                     | How AgentIndemnity Addresses It                                                                                |
+| Criterion                     | How Agent Indemnity Addresses It                                                                                |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | **Application of Technology** | Gemini routing + Featherless specialists + Circle Gateway Nanopayments + Arc settlement + on-chain slashing    |
 | **Presentation**              | Three-view dashboard, routed inference story, pricing visibility, pre-recorded jailbreak, Arc proof            |

@@ -19,7 +19,7 @@ export function AgentChat() {
     {
       id: "1",
       role: "assistant",
-      content: "Hello. I am the AgentIndemnity automated support assistant. How can I help you today?",
+      content: "Hello. I am the Agent Indemnity automated support assistant. How can I help you today?",
     }
   ]);
   const [input, setInput] = useState("");

@@ -44,7 +44,7 @@ def main() -> None:
 
     results = []
     print(f"\n{'-'*70}")
-    print(f"  AgentIndemnity — Sprint 2 Demo  ({len(DEMO_PROMPTS)} prompts)")
+    print(f"  Agent Indemnity — Sprint 2 Demo  ({len(DEMO_PROMPTS)} prompts)")
     print(f"{'-'*70}\n")
 
     for item in DEMO_PROMPTS:

@@ -16,7 +16,9 @@ interface AgentState {
   setBondBalance: (balance: number) => void;
 }
 
-const INITIAL_BOND = 10000;
+const parsedInitialBond = Number(process.env.NEXT_PUBLIC_INITIAL_BOND_USDC ?? "1.0");
+const INITIAL_BOND =
+  Number.isFinite(parsedInitialBond) && parsedInitialBond > 0 ? parsedInitialBond : 1.0;
 
 export const useAgentStore = create<AgentState>((set) => ({
   transactions: [],

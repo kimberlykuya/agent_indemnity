@@ -1,7 +1,7 @@
 """
 agent/prompts/__init__.py
 --------------------------
-All LLM prompt templates for the AgentIndemnity agent.
+All LLM prompt templates for the Agent Indemnity agent.
 
 Route names used inside these prompts are imported from config so they
 stay in sync with the single source of truth.

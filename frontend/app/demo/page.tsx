@@ -52,7 +52,7 @@ export default function CustomerDemo() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-white tracking-tight">Agent Support</h1>
-              <p className="text-neutral-500 text-xs mt-0.5">Protected by AgentIndemnity</p>
+              <p className="text-neutral-500 text-xs mt-0.5">Protected by Agent Indemnity</p>
             </div>
           </div>
           
