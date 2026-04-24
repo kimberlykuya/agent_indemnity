@@ -17,7 +17,7 @@ import httpx
 
 API_URL = "http://localhost:8000"
 LOGS_DIR = pathlib.Path(__file__).parent.parent / "logs"
-ARC_EXPLORER_TX_BASE = "https://explorer.arc.io/tx"
+ARC_EXPLORER_TX_BASE = "https://testnet.arcscan.app/tx"
 SUBMISSION_EVIDENCE_JSON = LOGS_DIR / "submission_evidence.json"
 SUBMISSION_EVIDENCE_MD = LOGS_DIR / "submission_evidence.md"
 

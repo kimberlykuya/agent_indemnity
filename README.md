@@ -116,8 +116,8 @@ python backend/scripts/generate_arc_proof.py
 
 | Artifact | Value |
 |----------|-------|
-| **Contract Address** | `0xE98B5ece6E7819E1d174b13aA676df479E30ff02` |
-| **Arc Explorer** | [View Contract](https://explorer.arc.io/address/0xE98B5ece6E7819E1d174b13aA676df479E30ff02) |
+| **Contract Address** | `0xC42F9a083f34D6Cf332bD4D33B44CfE02ccC2534` |
+| **Arc Explorer** | [View Contract](https://testnet.arcscan.app/address/0xC42F9a083f34D6Cf332bD4D33B44CfE02ccC2534) |
 | **Arc Chain ID** | 5042002 |
 | **Paid Requests** | 60+ in `backend/logs/demo_transactions.json` |
 | **Slash TX Hash** | See `backend/logs/arc_proof.json` |

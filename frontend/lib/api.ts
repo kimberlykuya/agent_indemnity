@@ -1,6 +1,6 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const ARC_EXPLORER_TX_BASE_URL =
-  process.env.NEXT_PUBLIC_ARC_EXPLORER_TX_BASE_URL || "https://explorer.arc.io/tx";
+  process.env.NEXT_PUBLIC_ARC_EXPLORER_TX_BASE_URL || "https://testnet.arcscan.app/tx";
 
 export type ChatResponse = {
   reply: string;

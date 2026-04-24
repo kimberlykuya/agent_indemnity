@@ -1,6 +1,6 @@
 # Agent Indemnity Submission Evidence
 
-Generated at: 2026-04-24T12:15:03+00:00
+Generated at: 2026-04-24T13:43:35.284964+00:00
 
 ## Required Criteria
 
@@ -8,7 +8,7 @@ Generated at: 2026-04-24T12:15:03+00:00
 | --- | --- | --- |
 | Real per-action pricing (<= $0.01) | PASS | min=$0.001000, max=$0.010000 |
 | Transaction frequency (50+) | FAIL | 41 request records |
-| On-chain slash/settlement proof | PASS | `0x736c617368353061643936356133373134343566656263383633376365636631` |
+| On-chain slash/settlement proof | PASS | `0x0167aa032667afcd988e6ea87b58f2d801fbb49a7c2889ca4838a923d163f292` |
 | Margin explanation vs traditional per-action costs | PASS | avg charge=$0.003244, low-cost assumption=$0.020000 |
 
 ## Request Summary
@@ -22,8 +22,8 @@ Generated at: 2026-04-24T12:15:03+00:00
 
 ## On-chain Proof
 
-- tx_hash: `0x736c617368353061643936356133373134343566656263383633376365636631`
-- explorer_url: https://explorer.arc.io/tx/0x736c617368353061643936356133373134343566656263383633376365636631
+- tx_hash: `0x0167aa032667afcd988e6ea87b58f2d801fbb49a7c2889ca4838a923d163f292`
+- explorer_url: https://testnet.arcscan.app/tx/0x0167aa032667afcd988e6ea87b58f2d801fbb49a7c2889ca4838a923d163f292
 
 ## Margin Explanation (Traditional Direct Per-Action Settlement)
 
