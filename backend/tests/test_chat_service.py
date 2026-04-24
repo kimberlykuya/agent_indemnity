@@ -114,7 +114,7 @@ def test_process_message_returns_normalized_paid_response() -> None:
             "route_confidence": 0.9,
             "price_usdc": 0.001,
             "payment_status": "settled",
-            "payment_ref": "x402:pay_demo",
+            "payment_ref": "0xpaydemo",
             "flagged": False,
             "anomaly_reason": None,
             "slash_executed": False,
@@ -153,5 +153,6 @@ def test_process_message_returns_normalized_paid_response() -> None:
 
     assert response.payment_status == "settled"
     assert response.timestamp == FIXED_NOW
+    assert response.payment_ref == "0xpaydemo"
     assert response.payer_wallet_address == "0xabc123"
     assert response.beneficiary_wallet_address == "0xabc123"

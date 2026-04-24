@@ -29,7 +29,6 @@ from agent.anomaly_detector import detect_anomaly
 from agent.model_clients import (
     ModelClientError,
     call_featherless,
-    call_gemini_action_controller,
     call_gemini_fallback,
 )
 from agent.payment_meter import create_payment_record, get_price
@@ -132,11 +131,24 @@ def handle_paid_request(
     """Process one paid customer message end-to-end."""
     t0 = time.monotonic()
     payment = create_payment_record(user_id, route, price)
+    gateway_payment_ref = payment_ref
+    onchain_payment_ref = payment_ref
 
     try:
         reply, model_id = _generate_reply(route, message)
-        payment_status = "settled"
-        payment_error = None
+        try:
+            onchain_payment_ref = pay_premium(price)
+            payment_status = "settled"
+            payment_error = None
+        except Exception as exc:
+            logger.error(
+                "On-chain premium settlement failed after payment verification: route=%s amount=%s error=%s",
+                route,
+                price,
+                exc,
+            )
+            payment_status = "failed"
+            payment_error = str(exc)
     except ModelClientError as exc:
         logger.error("Provider call failed after payment verification: route=%s error=%s", route, exc)
         reply = "I'm sorry, I'm unable to process your request right now. Please try again."
@@ -205,7 +217,8 @@ def handle_paid_request(
         "route_confidence": route_confidence,
         "price_usdc": price,
         "payment_status": payment_status,
-        "payment_ref": payment_ref,
+        "payment_ref": onchain_payment_ref,
+        "gateway_payment_ref": gateway_payment_ref,
         "payer_wallet_address": user_wallet_address,
         "beneficiary_wallet_address": beneficiary_wallet_address,
         "flagged": anomaly["flagged"],
@@ -245,7 +258,8 @@ def handle_paid_request(
         "model_used": model_id,
         "price_usdc": price,
         "payment_status": payment_status,
-        "payment_ref": payment_ref,
+        "payment_ref": onchain_payment_ref,
+        "gateway_payment_ref": gateway_payment_ref,
         "anomaly_flagged": anomaly["flagged"],
         "anomaly_reason": anomaly["reason"],
         "anomaly_signal": anomaly["signal"],

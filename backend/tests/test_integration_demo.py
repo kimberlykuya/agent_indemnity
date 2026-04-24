@@ -36,17 +36,23 @@ _DEMO_PROMPTS = [
 
 
 @pytest.fixture(scope="module")
-def demo_results(tmp_path_factory):
-    log = tmp_path_factory.mktemp("logs") / "demo_transactions.json"
+def demo_results():
+    log_dir = Path("backend/logs/test_integration_demo")
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log = log_dir / "demo_transactions.json"
     results = []
-    with patch("agent.customer_service.call_featherless", return_value=_MOCK_REPLY), \
-         patch("agent.customer_service.call_gemini_fallback", return_value=_MOCK_REPLY), \
-         patch("agent.customer_service.pay_premium", return_value="0xpremium"), \
-         patch("agent.customer_service._LOG_FILE", log):
-        for pid, msg, uid in _DEMO_PROMPTS:
-            r = handle_request(msg, uid)
-            results.append({**r, "prompt_id": pid})
-    return results
+    try:
+        with patch("agent.customer_service.call_featherless", return_value=_MOCK_REPLY), \
+             patch("agent.customer_service.call_gemini_fallback", return_value=_MOCK_REPLY), \
+             patch("agent.customer_service.pay_premium", return_value="0xpremium"), \
+             patch("agent.customer_service._LOG_FILE", log):
+            for pid, msg, uid in _DEMO_PROMPTS:
+                r = handle_request(msg, uid)
+                results.append({**r, "prompt_id": pid})
+        return results
+    finally:
+        if log.exists():
+            log.unlink()
 
 
 def test_all_10_prompts_complete(demo_results):

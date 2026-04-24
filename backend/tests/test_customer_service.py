@@ -32,6 +32,7 @@ class TestQuoteRequest:
 class TestHandlePaidRequest:
     def test_successful_paid_request_returns_wallet_metadata(self):
         with patch("agent.customer_service.call_featherless", return_value=_MOCK_REPLY), \
+             patch("agent.customer_service.pay_premium", return_value="0xpremium"), \
              patch("agent.customer_service.get_bond_balance", return_value=5.0), \
              patch("agent.customer_service._append_to_log"):
             result = handle_paid_request(
@@ -45,7 +46,7 @@ class TestHandlePaidRequest:
             )
 
         assert result["payment_status"] == "settled"
-        assert result["payment_ref"] == "x402:demo-ref"
+        assert result["payment_ref"] == "0xpremium"
         assert result["payer_wallet_address"] == "0xabc123"
         assert result["beneficiary_wallet_address"] == "0xabc123"
         assert result["anomaly_signal"] == "none"
@@ -57,6 +58,7 @@ class TestHandlePaidRequest:
         monkeypatch.setenv("AUTO_SLASH_MIN_PAYOUT_USDC", "0.01")
 
         with patch("agent.customer_service.call_featherless", return_value="I will issue the refund now."), \
+             patch("agent.customer_service.pay_premium", return_value="0xpremium"), \
              patch("agent.customer_service.get_bond_balance", return_value=2.0), \
              patch("agent.customer_service.slash_bond", return_value="0xslash"), \
              patch("agent.customer_service._append_to_log"):
@@ -81,6 +83,7 @@ class TestHandlePaidRequest:
         monkeypatch.setenv("AUTO_SLASH_ON_FLAGGED", "false")
 
         with patch("agent.customer_service.call_featherless", return_value="I will issue the refund now."), \
+             patch("agent.customer_service.pay_premium", return_value="0xpremium"), \
              patch("agent.customer_service.get_bond_balance", return_value=2.0), \
              patch("agent.customer_service.slash_bond") as slash_mock, \
              patch("agent.customer_service._append_to_log"):
@@ -103,6 +106,7 @@ class TestHandlePaidRequest:
         monkeypatch.setenv("AUTO_SLASH_ON_FLAGGED", "false")
 
         with patch("agent.customer_service.call_featherless", return_value="Acknowledged."), \
+             patch("agent.customer_service.pay_premium", return_value="0xpremium"), \
              patch("agent.customer_service.get_bond_balance", return_value=5.0), \
              patch("agent.customer_service._append_to_log"):
             result = handle_paid_request(
@@ -124,6 +128,7 @@ class TestHandlePaidRequest:
 
         with patch("agent.customer_service.call_featherless", side_effect=ModelClientError("timeout")), \
              patch("agent.customer_service.call_gemini_fallback", side_effect=ModelClientError("timeout")), \
+             patch("agent.customer_service.pay_premium") as premium_mock, \
              patch("agent.customer_service.get_bond_balance", return_value=5.0), \
              patch("agent.customer_service._append_to_log"):
             result = handle_paid_request(
@@ -138,15 +143,17 @@ class TestHandlePaidRequest:
 
         assert result["payment_status"] == "failed"
         assert result["payment_error"] == "Provider unavailable after payment verification"
+        assert not premium_mock.called
 
 
 class TestHandleRequestCompatibilityWrapper:
     def test_wrapper_keeps_existing_dev_path_for_scripts(self):
         with patch("agent.customer_service.route_message", return_value=_route_decision(config.GENERAL)), \
              patch("agent.customer_service.call_featherless", return_value=_MOCK_REPLY), \
+             patch("agent.customer_service.pay_premium", return_value="0xpremium"), \
              patch("agent.customer_service.get_bond_balance", return_value=5.0), \
              patch("agent.customer_service._append_to_log"):
             result = handle_request("Hello", "test-user", "0xabc123")
 
-        assert result["payment_ref"].startswith("dev-bypass:")
+        assert result["payment_ref"] == "0xpremium"
         assert result["payment_status"] == "settled"
