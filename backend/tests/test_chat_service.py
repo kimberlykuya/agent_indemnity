@@ -52,3 +52,24 @@ def test_process_message_normalizes_payment_failure_without_raising() -> None:
 
     assert response.payment_status == "failed"
     assert response.timestamp == FIXED_NOW
+
+
+def test_process_message_raises_when_payment_reference_is_missing() -> None:
+    service = ChatService(
+        orchestrator=lambda message, user_id: {
+            "reply": "Processed",
+            "model": "demo-model",
+            "route_category": "general",
+            "price_usdc": 0.001,
+            "payment_status": "settled",
+            "flagged": False,
+        },
+        bond_balance_reader=lambda: 100.0,
+        now_factory=lambda: FIXED_NOW,
+    )
+
+    with pytest.raises(ChatServiceError) as exc_info:
+        service.process_message("hello", "user_1")
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.message == "Chat service returned an incomplete response"

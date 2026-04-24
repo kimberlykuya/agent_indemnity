@@ -1,11 +1,11 @@
 {
   "event_type": "bond_slashed",
-  "tx_hash": "0x0167aa032667afcd988e6ea87b58f2d801fbb49a7c2889ca4838a923d163f292",
-  "arc_explorer_url": "https://testnet.arcscan.app/tx/0x0167aa032667afcd988e6ea87b58f2d801fbb49a7c2889ca4838a923d163f292",
+  "tx_hash": "0x0d40a7e2a6210ce7802521abda6c5e34b14c5b8383682d73b74489dba512dd8a",
+  "arc_explorer_url": "https://testnet.arcscan.app/tx/0x0d40a7e2a6210ce7802521abda6c5e34b14c5b8383682d73b74489dba512dd8a",
   "amount_usdc": 0.001,
-  "timestamp": "2026-04-24T13:43:35.284964+00:00",
+  "timestamp": "2026-04-24T14:29:18.140432+00:00",
   "bond_balance_after": 0.0,
-  "contract_address": "0xC42F9a083f34D6Cf332bD4D33B44CfE02ccC2534",
-  "deploy_tx_hash": "0x69d1836d82d878f94e4cb6c294ad693e4b5ca2a626358c2a0dfa1c823e36f2e5",
-  "stake_tx_hash": "0x589c93fd1ac072bd31abba5b29c98b5cdca78841b767481a9f26d4684041fc9d"
+  "contract_address": "0x8d1Cc9E493E64272ccb14ABFE32074E5dd2B0d3B",
+  "deploy_tx_hash": "0xaaca31480702b9ebced85a74a78f3fe1c60e77ce012215da6f9356aaf3a24df8",
+  "stake_tx_hash": "0x54654053a3b739c5317f6ae92550313193803332d04682b32c6f98b89e8b1528"
 }

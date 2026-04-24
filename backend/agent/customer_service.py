@@ -101,7 +101,7 @@ def _action_controller_context(
     try:
         available_bond_balance = max(float(get_bond_balance()), 0.0)
     except Exception:
-        available_bond_balance = 0.0
+        available_bond_balance = None
 
     return {
         "user_id": user_id,
@@ -334,7 +334,7 @@ def handle_request(message: str, user_id: str = "demo-user") -> dict:
     try:
         bond_balance_after = float(get_bond_balance())
     except Exception:
-        bond_balance_after = 0.0
+        bond_balance_after = None
 
     result = {
         "reply":            reply,

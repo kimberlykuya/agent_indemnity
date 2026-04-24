@@ -1,52 +1,15 @@
 {
-  "generated_at": "2026-04-24T13:58:22+00:00",
-  "inputs": {
-    "transactions_path": "C:\\Users\\USER\\OneDrive - Strathmore University\\Documents\\agent_indemnity\\backend\\logs\\demo_transactions.json",
-    "load_results_path": "C:\\Users\\USER\\OneDrive - Strathmore University\\Documents\\agent_indemnity\\backend\\logs\\load_test_results.json"
-  },
+  "quarantined_at": "2026-04-24T14:26:17.3248122Z",
+  "reason": "Referenced stale demo log artifacts captured before real-only transaction enforcement.",
+  "quarantined": true,
+  "generated_at": "2026-04-24T14:29:18.140432+00:00",
   "criteria": {
-    "per_action_pricing_leq_0_01": {
-      "pass": true
-    },
-    "transaction_frequency_50_plus": {
-      "pass": true
-    },
     "onchain_slash_proof": {
       "pass": true
-    },
-    "traditional_cost_margin_gap": {
-      "pass": true
-    }
-  },
-  "stats": {
-    "total_requests": 65,
-    "settled_requests": 65,
-    "flagged_requests": 15,
-    "price_min_usdc": 0.001,
-    "price_max_usdc": 0.01,
-    "price_avg_usdc": 0.003538,
-    "total_volume_usdc": 0.23,
-    "avg_latency_ms": 16754,
-    "route_counts": {
-      "general": 29,
-      "technical": 12,
-      "legal_risk": 15,
-      "fallback_complex": 9
-    },
-    "model_counts": {
-      "Qwen/Qwen3-0.6B": 56,
-      "gemini-3.1-pro-preview": 9
     }
   },
   "slash_proof": {
-    "tx_hash": "0x0167aa032667afcd988e6ea87b58f2d801fbb49a7c2889ca4838a923d163f292",
-    "explorer_url": "https://testnet.arcscan.app/tx/0x0167aa032667afcd988e6ea87b58f2d801fbb49a7c2889ca4838a923d163f292"
-  },
-  "pricing_economics": {
-    "average_price_usdc": 0.003538,
-    "traditional_cost_low_usdc": 0.02,
-    "traditional_cost_high_usdc": 0.2,
-    "avg_margin_at_low_cost_usdc": -0.016462,
-    "avg_margin_at_high_cost_usdc": -0.196462
+    "tx_hash": "0x0d40a7e2a6210ce7802521abda6c5e34b14c5b8383682d73b74489dba512dd8a",
+    "explorer_url": "https://testnet.arcscan.app/tx/0x0d40a7e2a6210ce7802521abda6c5e34b14c5b8383682d73b74489dba512dd8a"
   }
 }

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from uuid import uuid4
 
 from pydantic import ValidationError
 
@@ -101,4 +100,4 @@ class ChatService:
         payment_ref = raw.get("payment_ref")
         if payment_ref:
             return str(payment_ref)
-        return f"pay_{uuid4().hex[:12]}"
+        raise ChatServiceError("Chat service returned an incomplete response", status_code=500)

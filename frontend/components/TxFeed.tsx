@@ -9,6 +9,14 @@ export function TxFeed() {
   const transactions = useAgentStore((state) => state.transactions);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  const isExplorerVerifiableHash = (hash?: string | null) => {
+    if (!hash || !/^0x[a-fA-F0-9]{64}$/.test(hash)) {
+      return false;
+    }
+    const lowered = hash.toLowerCase();
+    return !lowered.startsWith("0x736c617368") && !lowered.startsWith("0x746f707570");
+  };
+
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden flex flex-col h-[400px]">
       <div className="px-4 py-3 border-b border-neutral-800 flex justify-between items-center bg-neutral-950">
@@ -31,26 +39,27 @@ export function TxFeed() {
               tx.type === "bond_slashed"
                 ? `Bond slash executed${tx.tx_hash ? ` (${tx.tx_hash.slice(0, 12)}...)` : ""}`
                 : tx.payment_ref || "Premium request recorded";
+            const hasVerifiableExplorerLink = isExplorerVerifiableHash(tx.tx_hash);
             const amountLabel =
               tx.type === "bond_slashed" ? `$${tx.amount.toFixed(2)} USDC` : `$${tx.amount.toFixed(3)} USDC`;
             const statusLabel =
               tx.type === "bond_slashed"
-                ? tx.tx_hash ? "on-chain" : "slash"
+                ? hasVerifiableExplorerLink ? "on-chain" : "unverified"
                 : tx.status || "pending";
             const badgeLabel = tx.type === "bond_slashed" ? "bond" : (tx.route_category || "system");
             const rowClassName = cn(
               "flex items-start justify-between gap-4 p-3 rounded-md bg-neutral-950 border transition-colors relative",
               tx.type === "bond_slashed"
-                ? tx.tx_hash
+                ? hasVerifiableExplorerLink
                   ? "border-red-500/40 hover:border-emerald-500/40 cursor-pointer"
                   : "border-red-500/40 hover:border-red-500/60"
-                : tx.tx_hash
+                : hasVerifiableExplorerLink
                   ? "border-neutral-800/50 hover:border-neutral-700 cursor-pointer"
                   : "border-neutral-800/50 hover:border-neutral-700"
             );
             const rowContent = (
               <>
-                {tx.tx_hash && (
+                {hasVerifiableExplorerLink && (
                   <ExternalLink className="w-3.5 h-3.5 text-neutral-500 absolute top-3 right-3" />
                 )}
                 <div className="flex-1 space-y-1 pr-6">
@@ -135,7 +144,7 @@ export function TxFeed() {
                             <div className="text-neutral-300 text-xs font-mono">{truncatedHash}</div>
                           </div>
                         </div>
-                        {tx.tx_hash && (
+                        {hasVerifiableExplorerLink && tx.tx_hash && (
                           <a
                             href={`https://testnet.arcscan.app/tx/${tx.tx_hash}`}
                             target="_blank"
@@ -145,6 +154,11 @@ export function TxFeed() {
                           >
                             View on Arc Explorer →
                           </a>
+                        )}
+                        {!hasVerifiableExplorerLink && tx.tx_hash && (
+                          <div className="text-[10px] text-amber-400 mt-2">
+                            Explorer link hidden because this hash is not verifier-safe.
+                          </div>
                         )}
                       </>
                     ) : (
