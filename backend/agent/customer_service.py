@@ -136,6 +136,7 @@ def _run_ai_actions(
     result = {
         "payment_ref": payment_ref,
         "payment_status": payment_status,
+        "payment_error": None,
         "slash_executed": False,
         "slash_tx_hash": None,
         "slash_payout": None,
@@ -193,6 +194,7 @@ def _run_ai_actions(
                     exc,
                 )
                 result["payment_status"] = "payment_failed"
+                result["payment_error"] = str(exc)
         elif name == "slash_performance_bond":
             if not flagged:
                 logger.warning("Ignoring AI slash tool call because exchange is not flagged")
@@ -236,6 +238,7 @@ def _run_ai_actions(
     if not settled_by_ai:
         logger.warning("AI controller did not execute settle_premium; request remains unsettled")
         result["payment_status"] = "payment_failed"
+        result["payment_error"] = result["payment_error"] or "Premium settlement was not executed"
 
     return result
 
@@ -323,10 +326,13 @@ def handle_request(message: str, user_id: str = "demo-user") -> dict:
         )
         payment_ref = action_result["payment_ref"]
         payment_status = action_result["payment_status"]
+        payment_error = action_result["payment_error"]
         slash_executed = bool(action_result["slash_executed"])
         slash_tx_hash = action_result["slash_tx_hash"]
         slash_payout = action_result["slash_payout"]
         slash_victim_address = action_result["slash_victim_address"]
+    else:
+        payment_error = None
 
     # 6. Latency
     latency_ms = int((time.monotonic() - t0) * 1000)
@@ -346,6 +352,7 @@ def handle_request(message: str, user_id: str = "demo-user") -> dict:
         "payment_ref":      payment_ref,
         "flagged":          anomaly["flagged"],
         "anomaly_reason":   anomaly["reason"],
+        "payment_error":    payment_error,
         "slash_executed":   slash_executed,
         "slash_tx_hash":    slash_tx_hash,
         "slash_payout":     slash_payout,
@@ -370,6 +377,7 @@ def handle_request(message: str, user_id: str = "demo-user") -> dict:
         "bond_balance_after": bond_balance_after,
         "route_confidence":   route_decision["confidence"],
         "payment_ref":        payment_ref,
+        "payment_error":      payment_error,
         "slash_executed":     slash_executed,
         "slash_tx_hash":      slash_tx_hash,
         "slash_payout":       slash_payout,

@@ -28,6 +28,9 @@ export type TransactionRecord = {
   tx_hash?: string | null;
   victim_address?: string | null;
   flagged?: boolean | null;
+  prompt?: string | null;
+  reply?: string | null;
+  anomaly_reason?: string | null;
 };
 
 export type BondStatusResponse = {
@@ -36,11 +39,12 @@ export type BondStatusResponse = {
   total_paid_requests: number;
 };
 
-export async function sendChatMessage(message: string): Promise<ChatResponse> {
+export async function sendChatMessage(message: string, signal?: AbortSignal): Promise<ChatResponse> {
   const response = await fetch(`${API_URL}/agent/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, user_id: "demo_user" }),
+    signal,
   });
 
   if (!response.ok) {

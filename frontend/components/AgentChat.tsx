@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { Send, Bot, User } from "lucide-react";
 import { sendChatMessage } from "../lib/api";
 import { cn } from "../lib/utils";
+import { useAgentStore } from "../store/useAgentStore";
 
 interface Message {
   id: string;
@@ -15,6 +16,7 @@ interface Message {
 }
 
 export function AgentChat() {
+  const setTransactionContext = useAgentStore((state) => state.setTransactionContext);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -43,6 +45,10 @@ export function AgentChat() {
 
     try {
       const result = await sendChatMessage(userMsg);
+      setTransactionContext(result.payment_ref, {
+        prompt: userMsg,
+        reply: result.reply,
+      });
 
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),

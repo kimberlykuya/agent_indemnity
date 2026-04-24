@@ -1,4 +1,5 @@
 import logging
+import time
 
 from blockchain.arc_client import PERFORMANCE_BOND_ADDR, USDC_CONTRACT_ADDR, get_web3
 
@@ -56,6 +57,8 @@ _ERC20_ABI = [
 ]
 
 _MAX_UINT256 = (1 << 256) - 1
+_TXPOOL_FULL_RETRY_ATTEMPTS = 4
+_TXPOOL_FULL_BACKOFF_SECONDS = 2.0
 
 
 def _get_contract(w3):
@@ -74,16 +77,37 @@ def _get_usdc_contract(w3):
     )
 
 
+def _is_txpool_full_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "txpool is full" in message
+
+
 def _send_contract_transaction(w3, account, private_key: str, tx) -> str:
     signed_tx = w3.eth.account.sign_transaction(tx, private_key=private_key)
-    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-    hex_hash = tx_hash.hex()
-    if not hex_hash.startswith("0x"):
-        hex_hash = f"0x{hex_hash}"
-    receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=180)
-    if receipt.status != 1:
-        raise RuntimeError("On-chain transaction reverted")
-    return hex_hash
+
+    for attempt in range(1, _TXPOOL_FULL_RETRY_ATTEMPTS + 1):
+        try:
+            tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+            hex_hash = tx_hash.hex()
+            if not hex_hash.startswith("0x"):
+                hex_hash = f"0x{hex_hash}"
+            receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=180)
+            if receipt.status != 1:
+                raise RuntimeError("On-chain transaction reverted")
+            return hex_hash
+        except Exception as exc:
+            if not _is_txpool_full_error(exc) or attempt == _TXPOOL_FULL_RETRY_ATTEMPTS:
+                raise
+            backoff = _TXPOOL_FULL_BACKOFF_SECONDS * attempt
+            logger.warning(
+                "Arc txpool full; retrying transaction submission in %.1fs (attempt %d/%d)",
+                backoff,
+                attempt,
+                _TXPOOL_FULL_RETRY_ATTEMPTS,
+            )
+            time.sleep(backoff)
+
+    raise RuntimeError("Unable to submit on-chain transaction")
 
 
 def _ensure_usdc_allowance(w3, owner_address: str, amount_raw: int, private_key: str) -> str | None:

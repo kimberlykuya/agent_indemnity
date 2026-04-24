@@ -125,6 +125,7 @@ class TestHandleRequest:
 
         assert not payment_mock.called
         assert result["payment_status"] == "payment_failed"
+        assert result["payment_error"] == "Premium settlement was not executed"
 
     def test_action_controller_error_marks_payment_failed_without_backend_fallback(self):
         from agent.model_clients import ModelClientError
@@ -137,6 +138,18 @@ class TestHandleRequest:
 
         assert not payment_mock.called
         assert result["payment_status"] == "payment_failed"
+        assert result["payment_error"] == "Premium settlement was not executed"
+
+    def test_settlement_failure_surfaces_underlying_error(self):
+        fl, gm = _patch_provider()
+        with fl, gm, \
+             patch("agent.customer_service.call_gemini_action_controller", return_value=_SETTLE_CALL), \
+             patch("agent.customer_service.pay_premium", side_effect=RuntimeError("{'code': -32003, 'message': 'txpool is full'}")), \
+             patch("agent.customer_service._append_to_log"):
+            result = handle_request("What are your hours?", "u")
+
+        assert result["payment_status"] == "payment_failed"
+        assert "txpool is full" in result["payment_error"]
 
     def test_plain_general_prompt_does_not_require_gemini_router(self):
         fl, gm = _patch_provider()

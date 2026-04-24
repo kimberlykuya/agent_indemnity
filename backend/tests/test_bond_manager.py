@@ -81,3 +81,34 @@ def test_ensure_usdc_allowance_approves_max_when_allowance_is_too_low(monkeypatc
     assert result == "0xapprove"
     assert approve_builder.last_tx == {"from": "0xowner", "nonce": 7}
     assert len(sent) == 1
+
+
+def test_send_contract_transaction_retries_when_txpool_is_full(monkeypatch):
+    sleep_calls = []
+    monkeypatch.setattr(bond_manager.time, "sleep", lambda seconds: sleep_calls.append(seconds))
+
+    class _FakeHash:
+        def hex(self):
+            return "abc123"
+
+    send_attempts = {"count": 0}
+
+    def _send_raw_transaction(_raw):
+        send_attempts["count"] += 1
+        if send_attempts["count"] == 1:
+            raise RuntimeError({"code": -32003, "message": "txpool is full"})
+        return _FakeHash()
+
+    w3 = SimpleNamespace(
+        eth=SimpleNamespace(
+            account=SimpleNamespace(sign_transaction=lambda tx, private_key: SimpleNamespace(raw_transaction=b"signed")),
+            send_raw_transaction=_send_raw_transaction,
+            wait_for_transaction_receipt=lambda tx_hash, timeout=180: SimpleNamespace(status=1),
+        )
+    )
+
+    result = bond_manager._send_contract_transaction(w3, None, "secret", {"nonce": 7})
+
+    assert result == "0xabc123"
+    assert send_attempts["count"] == 2
+    assert sleep_calls == [2.0]

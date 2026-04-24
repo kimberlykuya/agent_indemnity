@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAgentStore } from "../store/useAgentStore";
+import { getArcExplorerTxUrl } from "../lib/api";
 import { cn } from "../lib/utils";
 import { ChevronDown, ExternalLink } from "lucide-react";
 
@@ -16,6 +17,21 @@ export function TxFeed() {
     const lowered = hash.toLowerCase();
     return !lowered.startsWith("0x736c617368") && !lowered.startsWith("0x746f707570");
   };
+
+  const getExplorerHash = (tx: (typeof transactions)[number]) => {
+    const candidate = tx.type === "bond_slashed" ? tx.tx_hash : tx.payment_ref;
+    return isExplorerVerifiableHash(candidate) ? candidate : null;
+  };
+
+  const formatLongTimestamp = (timestamp: string) =>
+    new Date(timestamp).toLocaleString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+    });
 
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden flex flex-col h-[400px]">
@@ -38,14 +54,15 @@ export function TxFeed() {
             const preview =
               tx.type === "bond_slashed"
                 ? `Bond slash executed${tx.tx_hash ? ` (${tx.tx_hash.slice(0, 12)}...)` : ""}`
-                : tx.payment_ref || "Premium request recorded";
-            const hasVerifiableExplorerLink = isExplorerVerifiableHash(tx.tx_hash);
+                : tx.prompt || tx.payment_ref || "Premium request recorded";
+            const explorerHash = getExplorerHash(tx);
+            const hasVerifiableExplorerLink = explorerHash !== null;
             const amountLabel =
               tx.type === "bond_slashed" ? `$${tx.amount.toFixed(2)} USDC` : `$${tx.amount.toFixed(3)} USDC`;
             const statusLabel =
               tx.type === "bond_slashed"
                 ? hasVerifiableExplorerLink ? "on-chain" : "unverified"
-                : tx.status || "pending";
+                : hasVerifiableExplorerLink ? "on-chain" : (tx.status || "pending");
             const badgeLabel = tx.type === "bond_slashed" ? "bond" : (tx.route_category || "system");
             const rowClassName = cn(
               "flex items-start justify-between gap-4 p-3 rounded-md bg-neutral-950 border transition-colors relative",
@@ -80,8 +97,8 @@ export function TxFeed() {
                   <p className={cn("text-sm", tx.flagged ? "text-red-300" : "text-neutral-300")}>
                     &quot;{preview.substring(0, 60)}{preview.length > 60 ? '...' : ''}&quot;
                   </p>
-                  {tx.tx_hash && (
-                    <p className="text-neutral-500 text-[10px] font-mono">{tx.tx_hash}</p>
+                  {(tx.tx_hash || tx.payment_ref) && (
+                    <p className="text-neutral-500 text-[10px] font-mono">{tx.tx_hash || tx.payment_ref}</p>
                   )}
                 </div>
                 <div className="text-right flex flex-col gap-1 items-end shrink-0 pr-6">
@@ -102,12 +119,14 @@ export function TxFeed() {
               minute: "2-digit",
               second: "2-digit",
             });
-            const bondTimestamp = new Date(tx.timestamp).toLocaleString();
+            const bondTimestamp = formatLongTimestamp(tx.timestamp);
             const truncatedPaymentRef = tx.payment_ref ? `${tx.payment_ref.slice(0, 18)}...` : "N/A";
             const truncatedVictim = tx.victim_address
               ? `${tx.victim_address.slice(0, 8)}...${tx.victim_address.slice(-6)}`
               : "N/A";
             const truncatedHash = tx.tx_hash ? `${tx.tx_hash.slice(0, 12)}...` : "N/A";
+            const promptText = tx.prompt || "Not captured for this historical transaction.";
+            const replyText = tx.reply || "Not captured for this historical transaction.";
 
             return (
               <div key={tx.id}>
@@ -120,7 +139,7 @@ export function TxFeed() {
                 <div
                   className={cn(
                     "transition-all duration-200 overflow-hidden",
-                    isExpanded ? "max-h-[200px]" : "max-h-0"
+                    isExpanded ? "max-h-[480px]" : "max-h-0"
                   )}
                 >
                   <div className="bg-black/40 border-t border-neutral-800/50 px-3 py-3 rounded-b-md">
@@ -146,7 +165,7 @@ export function TxFeed() {
                         </div>
                         {hasVerifiableExplorerLink && tx.tx_hash && (
                           <a
-                            href={`https://testnet.arcscan.app/tx/${tx.tx_hash}`}
+                            href={getArcExplorerTxUrl(tx.tx_hash)}
                             target="_blank"
                             rel="noreferrer"
                             className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/20 rounded-md py-2 text-xs font-medium w-full text-center mt-2 block"
@@ -162,13 +181,13 @@ export function TxFeed() {
                         )}
                       </>
                     ) : (
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                        <div>
-                          <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Timestamp</div>
-                          <div className="text-neutral-300 text-xs font-mono">{requestTimestamp}</div>
-                        </div>
-                        <div>
-                          <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Route</div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                          <div>
+                            <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Timestamp</div>
+                            <div className="text-neutral-300 text-xs font-mono">{requestTimestamp}</div>
+                          </div>
+                          <div>
+                            <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Route</div>
                           <div className="text-neutral-300 text-xs font-mono">{tx.route_category || "N/A"}</div>
                         </div>
                         <div>
@@ -183,20 +202,44 @@ export function TxFeed() {
                           <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Status</div>
                           <div className="text-neutral-300 text-xs font-mono">{tx.status || "N/A"}</div>
                         </div>
-                        <div>
-                          <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Payment Ref</div>
-                          <div className="text-neutral-300 text-xs font-mono">{truncatedPaymentRef}</div>
-                        </div>
-                        <div>
+                          <div>
+                            <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Arc Tx</div>
+                            <div className="text-neutral-300 text-xs font-mono">{truncatedPaymentRef}</div>
+                          </div>
+                          <div>
                           <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Flagged</div>
                           <div className={cn("text-xs font-mono", tx.flagged ? "text-red-400" : "text-emerald-400")}>
                             {tx.flagged ? "Yes" : "No"}
                           </div>
                         </div>
+                        <div className="col-span-2">
+                          <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Prompt</div>
+                          <div className="text-neutral-300 text-xs font-mono whitespace-pre-wrap break-words">{promptText}</div>
+                        </div>
+                        <div className="col-span-2">
+                          <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Response</div>
+                          <div className="text-neutral-300 text-xs font-mono whitespace-pre-wrap break-words">{replyText}</div>
+                        </div>
                         {tx.flagged && anomalyReason && (
                           <div>
                             <div className="text-neutral-500 text-[10px] uppercase tracking-wider">Anomaly</div>
                             <div className="text-neutral-300 text-xs font-mono">{anomalyReason}</div>
+                          </div>
+                        )}
+                        {hasVerifiableExplorerLink && explorerHash && (
+                          <a
+                            href={getArcExplorerTxUrl(explorerHash)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/20 rounded-md py-2 text-xs font-medium w-full text-center mt-2 block col-span-2"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            View on Arc Explorer →
+                          </a>
+                        )}
+                        {!hasVerifiableExplorerLink && tx.payment_ref && (
+                          <div className="text-[10px] text-amber-400 mt-2 col-span-2">
+                            Explorer link hidden because this transaction reference is not verifier-safe.
                           </div>
                         )}
                       </div>

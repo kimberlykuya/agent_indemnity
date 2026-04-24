@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { connectSocket, disconnectSocket } from "../lib/socket";
 import { useAgentStore } from "../store/useAgentStore";
-import { getBondStatus, getTransactions } from "../lib/api";
+import { getBondStatus, getTransactions, sendChatMessage } from "../lib/api";
 import { TxFeed } from "../components/TxFeed";
 import { BondBalance } from "../components/BondBalance";
 import { BondChart } from "../components/BondChart";
@@ -11,8 +11,6 @@ import { MarginTable } from "../components/MarginTable";
 import { Copy, Terminal, ShieldAlert, BarChart3, Activity, Loader2, Play } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import Link from "next/link";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const DEMO_MESSAGES = [
   "What are your business hours?",
   "How do I reset my password?",
@@ -27,6 +25,7 @@ export default function ComplianceDashboard() {
   const transactions = useAgentStore((state) => state.transactions);
   const setTransactions = useAgentStore((state) => state.setTransactions);
   const setBondBalance = useAgentStore((state) => state.setBondBalance);
+  const setTransactionContext = useAgentStore((state) => state.setTransactionContext);
   const [isRunningDemo, setIsRunningDemo] = useState(false);
   const demoAbortControllerRef = useRef<AbortController | null>(null);
   
@@ -72,16 +71,15 @@ export default function ComplianceDashboard() {
 
     try {
       for (const message of DEMO_MESSAGES) {
-        const response = await fetch(`${API_URL}/agent/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message, user_id: "demo_user" }),
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed on prompt: ${message}`);
+        if (controller.signal.aborted) {
+          throw new DOMException("Demo sequence aborted", "AbortError");
         }
+
+        const result = await sendChatMessage(message, controller.signal);
+        setTransactionContext(result.payment_ref, {
+          prompt: message,
+          reply: result.reply,
+        });
       }
 
       toast.success("Demo sequence complete", { id: "demo-sequence" });

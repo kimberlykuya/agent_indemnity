@@ -100,4 +100,11 @@ class ChatService:
         payment_ref = raw.get("payment_ref")
         if payment_ref:
             return str(payment_ref)
+        payment_status = raw.get("payment_status")
+        if payment_status in {"payment_failed", "failed"}:
+            raise ChatServiceError(
+                str(raw.get("payment_error") or "On-chain settlement failed"),
+                status_code=503,
+                code="settlement_failed",
+            )
         raise ChatServiceError("Chat service returned an incomplete response", status_code=500)

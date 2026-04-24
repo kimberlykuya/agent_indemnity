@@ -5,50 +5,76 @@ export type Transaction = TransactionRecord & {
   id: string;
 };
 
+type TransactionContext = {
+  prompt?: string | null;
+  reply?: string | null;
+};
+
 interface AgentState {
   transactions: Transaction[];
   bondBalance: number | null;
   anomaliesCount: number;
   routeCounts: Record<string, number>;
+  transactionContextByRef: Record<string, TransactionContext>;
   setTransactions: (transactions: TransactionRecord[]) => void;
   addTransaction: (tx: TransactionRecord) => void;
+  setTransactionContext: (reference: string, context: TransactionContext) => void;
   slashBond: (amount: number) => void;
   setBondBalance: (balance: number) => void;
 }
+
+const routeKeys = ["general", "technical", "legal", "fallback"] as const;
+
+const emptyRouteCounts = () => ({
+  general: 0,
+  technical: 0,
+  legal: 0,
+  fallback: 0,
+});
+
+const getTransactionReference = (tx: TransactionRecord) => tx.payment_ref ?? tx.tx_hash ?? null;
+
+const mergeTransactionContext = (
+  tx: TransactionRecord,
+  transactionContextByRef: Record<string, TransactionContext>
+): Transaction => {
+  const reference = getTransactionReference(tx);
+  const context = reference ? transactionContextByRef[reference] : undefined;
+
+  return {
+    ...tx,
+    prompt: tx.prompt ?? context?.prompt ?? null,
+    reply: tx.reply ?? context?.reply ?? null,
+    id: `${tx.type}-${tx.timestamp}-${tx.payment_ref ?? tx.tx_hash ?? tx.amount}`,
+  };
+};
+
+const summarizeTransactions = (transactions: Transaction[]) => {
+  const routeCounts = emptyRouteCounts();
+  let anomaliesCount = 0;
+
+  for (const tx of transactions) {
+    if (tx.type === "request_paid" && tx.route_category && routeKeys.includes(tx.route_category as (typeof routeKeys)[number])) {
+      routeCounts[tx.route_category as keyof typeof routeCounts] += 1;
+    }
+    if ((tx.type === "request_paid" || tx.type === "anomaly_flagged") && tx.flagged) {
+      anomaliesCount += 1;
+    }
+  }
+
+  return { routeCounts, anomaliesCount };
+};
 
 export const useAgentStore = create<AgentState>((set) => ({
   transactions: [],
   bondBalance: null,
   anomaliesCount: 0,
-  routeCounts: {
-    general: 0,
-    technical: 0,
-    legal: 0,
-    fallback: 0,
-  },
+  routeCounts: emptyRouteCounts(),
+  transactionContextByRef: {},
 
-  setTransactions: (transactions) => set(() => {
-    const normalized = transactions.map((tx) => ({
-      ...tx,
-      id: `${tx.type}-${tx.timestamp}-${tx.payment_ref ?? tx.tx_hash ?? tx.amount}`,
-    }));
-
-    const routeCounts = {
-      general: 0,
-      technical: 0,
-      legal: 0,
-      fallback: 0,
-    };
-
-    let anomaliesCount = 0;
-    for (const tx of normalized) {
-      if (tx.type === "request_paid" && tx.route_category && tx.route_category in routeCounts) {
-        routeCounts[tx.route_category as keyof typeof routeCounts] += 1;
-      }
-      if ((tx.type === "request_paid" || tx.type === "anomaly_flagged") && tx.flagged) {
-        anomaliesCount += 1;
-      }
-    }
+  setTransactions: (transactions) => set((state) => {
+    const normalized = transactions.map((tx) => mergeTransactionContext(tx, state.transactionContextByRef));
+    const { routeCounts, anomaliesCount } = summarizeTransactions(normalized);
 
     return {
       transactions: normalized,
@@ -58,33 +84,43 @@ export const useAgentStore = create<AgentState>((set) => ({
   }),
 
   addTransaction: (tx) => set((state) => {
-    const newTx: Transaction = {
-      ...tx,
-      id: `${tx.type}-${tx.timestamp}-${tx.payment_ref ?? tx.tx_hash ?? tx.amount}`,
-    };
-
+    const newTx = mergeTransactionContext(tx, state.transactionContextByRef);
     const deduped = [newTx, ...state.transactions.filter((existing) => existing.id !== newTx.id)].slice(0, 100);
-    const routeCounts = {
-      general: 0,
-      technical: 0,
-      legal: 0,
-      fallback: 0,
-    };
-
-    let anomaliesCount = 0;
-    for (const item of deduped) {
-      if (item.type === "request_paid" && item.route_category && item.route_category in routeCounts) {
-        routeCounts[item.route_category as keyof typeof routeCounts] += 1;
-      }
-      if ((item.type === "request_paid" || item.type === "anomaly_flagged") && item.flagged) {
-        anomaliesCount += 1;
-      }
-    }
+    const { routeCounts, anomaliesCount } = summarizeTransactions(deduped);
 
     return {
       transactions: deduped,
       anomaliesCount,
       routeCounts,
+    };
+  }),
+
+  setTransactionContext: (reference, context) => set((state) => {
+    if (!reference.trim()) {
+      return state;
+    }
+
+    const transactionContextByRef = {
+      ...state.transactionContextByRef,
+      [reference]: {
+        ...state.transactionContextByRef[reference],
+        ...context,
+      },
+    };
+
+    const transactions = state.transactions.map((tx) =>
+      getTransactionReference(tx) === reference
+        ? {
+            ...tx,
+            prompt: tx.prompt ?? context.prompt ?? null,
+            reply: tx.reply ?? context.reply ?? null,
+          }
+        : tx
+    );
+
+    return {
+      transactionContextByRef,
+      transactions,
     };
   }),
 
