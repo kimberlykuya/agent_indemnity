@@ -57,11 +57,13 @@ class ChatResponse(APIModel):
     reply: str
     model: str
     route_category: PublicRouteCategory
+    route_confidence: float | None = None
     price_usdc: float
     payment_status: SettlementStatus
     bond_balance: float
     flagged: bool
     payment_ref: str
+    anomaly_reason: str | None = None
     slash_executed: bool = False
     slash_tx_hash: str | None = None
     slash_payout: float | None = None

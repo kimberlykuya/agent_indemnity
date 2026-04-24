@@ -36,20 +36,25 @@ export function TxFeed() {
             return (
               <div 
                 key={tx.id} 
-                className="flex items-start justify-between gap-4 p-3 rounded-md bg-neutral-950 border border-neutral-800/50 hover:border-neutral-700 transition-colors"
+                className={cn(
+                  "flex items-start justify-between gap-4 p-3 rounded-md bg-neutral-950 border transition-colors",
+                  tx.type === "bond_slashed"
+                    ? "border-red-500/40 hover:border-red-500/60"
+                    : "border-neutral-800/50 hover:border-neutral-700"
+                )}
               >
                 <div className="flex-1 space-y-1">
                   <div className="flex items-center gap-2">
                     <span className={cn(
                       "px-1.5 py-0.5 rounded text-[10px] uppercase font-semibold",
-                      tx.type === "bond_slashed" ? "bg-emerald-500/20 text-emerald-400" :
+                      tx.type === "bond_slashed" ? "bg-red-500/20 text-red-400" :
                       tx.flagged ? "bg-red-500/20 text-red-400" :
                       tx.route_category === "general" ? "bg-blue-500/20 text-blue-400" :
                       tx.route_category === "technical" ? "bg-amber-500/20 text-amber-400" :
                       tx.route_category === "legal" ? "bg-purple-500/20 text-purple-400" :
                       "bg-neutral-500/20 text-neutral-400"
                     )}>
-                      {badgeLabel}
+                      {tx.type === "bond_slashed" ? "BOND SLASHED" : badgeLabel}
                     </span>
                     <span className="text-neutral-500">{tx.model?.split('/').pop() || tx.type}</span>
                   </div>

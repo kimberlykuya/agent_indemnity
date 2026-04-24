@@ -20,6 +20,7 @@ import logging
 import os
 import pathlib
 import time
+from datetime import datetime, timezone
 
 from agent import config
 from agent.anomaly_detector import detect_anomaly
@@ -330,6 +331,11 @@ def handle_request(message: str, user_id: str = "demo-user") -> dict:
     # 6. Latency
     latency_ms = int((time.monotonic() - t0) * 1000)
 
+    try:
+        bond_balance_after = float(get_bond_balance())
+    except Exception:
+        bond_balance_after = 0.0
+
     result = {
         "reply":            reply,
         "model":            model_id,
@@ -350,5 +356,24 @@ def handle_request(message: str, user_id: str = "demo-user") -> dict:
     logger.info("Request handled: route=%s model=%s price=%s flagged=%s latency_ms=%d",
                 route, model_id, price, anomaly["flagged"], latency_ms)
 
-    _append_to_log({**result, "user_id": user_id, "message": message})
+    log_record = {
+        "timestamp":          datetime.now(timezone.utc).isoformat(),
+        "user_id":            user_id,
+        "message":            message,
+        "message_type":       "malicious" if anomaly["flagged"] else "normal",
+        "route_category":     route,
+        "model_used":         model_id,
+        "price_usdc":         price,
+        "payment_status":     payment_status,
+        "anomaly_flagged":    anomaly["flagged"],
+        "anomaly_reason":     anomaly["reason"],
+        "bond_balance_after": bond_balance_after,
+        "route_confidence":   route_decision["confidence"],
+        "payment_ref":        payment_ref,
+        "slash_executed":     slash_executed,
+        "slash_tx_hash":      slash_tx_hash,
+        "slash_payout":       slash_payout,
+        "latency_ms":         latency_ms,
+    }
+    _append_to_log(log_record)
     return result

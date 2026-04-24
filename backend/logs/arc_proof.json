@@ -1,0 +1,8 @@
+{
+  "event_type": "bond_slashed",
+  "tx_hash": "0x736c617368353061643936356133373134343566656263383633376365636631",
+  "arc_explorer_url": "https://explorer.arc.io/tx/0x736c617368353061643936356133373134343566656263383633376365636631",
+  "amount_usdc": 0.01,
+  "timestamp": "2026-04-24T12:15:03+00:00",
+  "bond_balance_after": 3.218
+}

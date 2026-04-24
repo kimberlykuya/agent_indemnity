@@ -1,0 +1,29 @@
+{
+  "scenario": "normal",
+  "input": {
+    "message": "What are your business hours?",
+    "user_id": "trace-demo-user"
+  },
+  "output": {
+    "route_category": "general",
+    "route_confidence": 0.9,
+    "model": "Qwen/Qwen3-0.6B",
+    "price_usdc": 0.001,
+    "payment_status": "settled",
+    "payment_ref": "0x746f707570343061653631663431326364346236656262646465323666333732",
+    "flagged": false,
+    "anomaly_reason": null,
+    "slash_executed": false,
+    "slash_tx_hash": null,
+    "slash_payout": null,
+    "bond_balance": 4.223,
+    "reply_preview": "Our business hours are typically from 9:00 AM to 6:00 PM, Monday through Friday. Let me know if you need further assistance!"
+  },
+  "bond_status_after": {
+    "balance": 4.223,
+    "state": "ACTIVE",
+    "total_paid_requests": 1
+  },
+  "gemini_function_calls_triggered": true,
+  "timestamp": "2026-04-24T12:14:01+00:00"
+}

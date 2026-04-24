@@ -243,7 +243,7 @@ def call_gemini_action_controller(context: dict[str, Any]) -> list[dict[str, Any
                 tools=[_ACTION_TOOL],
                 toolConfig=types.ToolConfig(
                     functionCallingConfig=types.FunctionCallingConfig(
-                        mode=types.FunctionCallingConfigMode.AUTO,
+                        mode=types.FunctionCallingConfigMode.ANY,
                         allowedFunctionNames=[
                             "settle_premium",
                             "slash_performance_bond",
@@ -254,6 +254,13 @@ def call_gemini_action_controller(context: dict[str, Any]) -> list[dict[str, Any
         )
         latency = int((time.monotonic() - t0) * 1000)
         calls = _extract_function_calls(response)
+        for fc in calls:
+            print(f"GEMINI_TOOL_CALL: {fc.get('name')} with args {fc.get('args')}")
+            logger.info(
+                "GEMINI_TOOL_CALL: %s with args %s",
+                fc.get("name"),
+                fc.get("args"),
+            )
         logger.info(
             "Gemini action controller complete: model=%s latency_ms=%d function_calls=%d",
             config.GEMINI_ACTION_MODEL,

@@ -48,25 +48,49 @@ async def _send_chat(client: httpx.AsyncClient, idx: int, prompt: dict):
                 "latency_ms": latency,
             }
     except Exception as e:
-        return {"id": idx, "success": False, "error": str(e), "latency_ms": -1}
+        return {
+            "id": idx,
+            "success": False,
+            "error": f"{type(e).__name__}: {e}",
+            "latency_ms": -1,
+        }
 
 
 async def _send_slash(client: httpx.AsyncClient):
     try:
+        status_resp = await client.get(f"{API_URL}/bond/status", timeout=10.0)
+        status_resp.raise_for_status()
+        bond_status = status_resp.json()
+        balance = float(bond_status.get("balance") or 0.0)
+        payout_amount = round(min(balance, 0.01), 6)
+        if payout_amount <= 0:
+            return {
+                "type": "slash",
+                "success": False,
+                "error": "No bond balance available for slash",
+                "bond_balance": balance,
+            }
+
         resp = await client.post(
             f"{API_URL}/bond/slash",
             json={
                 "victim_address": "0x191cc4e34e54444b9e10f4e3311c87382b0c0654",
-                "payout_amount": 500.0,
+                "payout_amount": payout_amount,
             },
             timeout=60.0,
         )
         if resp.status_code == 200:
-            return {"type": "slash", "success": True, **resp.json()}
+            return {"type": "slash", "success": True, "bond_balance": balance, **resp.json()}
         else:
-            return {"type": "slash", "success": False, "error": resp.text}
+            return {
+                "type": "slash",
+                "success": False,
+                "error": resp.text,
+                "bond_balance": balance,
+                "payout_amount": payout_amount,
+            }
     except Exception as e:
-        return {"type": "slash", "success": False, "error": str(e)}
+        return {"type": "slash", "success": False, "error": f"{type(e).__name__}: {e}"}
 
 
 async def main():

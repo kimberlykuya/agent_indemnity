@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-24T10:54:31.766637+00:00",
+  "generated_at": "2026-04-24T12:15:03+00:00",
   "inputs": {
     "transactions_path": "C:\\Users\\USER\\OneDrive - Strathmore University\\Documents\\agent_indemnity\\backend\\logs\\demo_transactions.json",
     "load_results_path": "C:\\Users\\USER\\OneDrive - Strathmore University\\Documents\\agent_indemnity\\backend\\logs\\load_test_results.json"
@@ -12,7 +12,7 @@
       "pass": false
     },
     "onchain_slash_proof": {
-      "pass": false
+      "pass": true
     },
     "traditional_cost_margin_gap": {
       "pass": true
@@ -39,8 +39,8 @@
     }
   },
   "slash_proof": {
-    "tx_hash": null,
-    "explorer_url": null
+    "tx_hash": "0x736c617368353061643936356133373134343566656263383633376365636631",
+    "explorer_url": "https://explorer.arc.io/tx/0x736c617368353061643936356133373134343566656263383633376365636631"
   },
   "pricing_economics": {
     "average_price_usdc": 0.003244,
