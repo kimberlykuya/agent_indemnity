@@ -45,18 +45,47 @@ class PaymentProof(APIModel):
     payer_wallet_address: str
     facilitator_tx_ref: str
     payment_tx_hash: str | None = None
+    circle_wallet_id: str | None = None
+    circle_wallet_address: str | None = None
+    x_payment_header: str | None = None
+    x_payment_payload: dict[str, Any] | None = None
 
     @field_validator("proof_token", "payer_wallet_address", "facilitator_tx_ref")
     @classmethod
     def validate_non_empty_fields(cls, value: str, info) -> str:
         return _require_non_empty(value, info.field_name)
 
-    @field_validator("payment_tx_hash")
+    @field_validator("payment_tx_hash", "circle_wallet_id", "circle_wallet_address", "x_payment_header")
     @classmethod
     def validate_optional_payment_tx_hash(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        return _require_non_empty(value, "payment_tx_hash")
+        return _require_non_empty(value, "optional_payment_field")
+
+
+class CircleAuthorizeRequest(APIModel):
+    message: str
+    user_id: str
+    user_wallet_address: str
+    payment_challenge_token: str
+
+    @field_validator("message", "user_id", "user_wallet_address", "payment_challenge_token")
+    @classmethod
+    def validate_non_empty_authorize_fields(cls, value: str, info) -> str:
+        return _require_non_empty(value, info.field_name)
+
+
+class CircleAuthorizeResponse(APIModel):
+    payment_challenge_token: str
+    circle_wallet_id: str
+    circle_wallet_address: str
+    x_payment_header: str
+    payment_proof: PaymentProof
+
+    @field_validator("payment_challenge_token", "circle_wallet_id", "circle_wallet_address", "x_payment_header")
+    @classmethod
+    def validate_non_empty_response_fields(cls, value: str, info) -> str:
+        return _require_non_empty(value, info.field_name)
 
 
 class ChatRequest(APIModel):

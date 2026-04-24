@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Bot, CreditCard, Send, ShieldAlert, User, Wallet } from "lucide-react";
 
-import { PaymentChallengeResponse, sendChatMessage } from "../lib/api";
+import { authorizeCirclePayment, PaymentChallengeResponse, sendChatMessage } from "../lib/api";
 import { useAgentStore } from "../store/useAgentStore";
 import { cn } from "../lib/utils";
 
@@ -61,6 +61,15 @@ export function AgentChat() {
   const formatUsdc = (value: number | undefined, digits = 3) =>
     typeof value === "number" && Number.isFinite(value) ? `$${value.toFixed(digits)} USDC` : "USDC pending";
 
+  const confirmLiveSlashDemo = () => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    return window.confirm(
+      "This will send the demo prompt, complete the payment challenge, and may trigger the live slash flow. Continue?"
+    );
+  };
+
   const requestChallenge = async (userMsg: string, trimmedWallet: string) => {
     const result = await sendChatMessage({
       message: userMsg,
@@ -102,16 +111,20 @@ export function AgentChat() {
     challenge: PaymentChallengeResponse,
     trimmedWallet: string
   ) => {
+    const authorization = await authorizeCirclePayment({
+      message: originalMessage,
+      userId: DEMO_USER_ID,
+      userWalletAddress: trimmedWallet,
+      paymentChallengeToken: challenge.payment_challenge_token,
+    });
+
     const result = await sendChatMessage({
       message: originalMessage,
       userId: DEMO_USER_ID,
       userWalletAddress: trimmedWallet,
       paymentChallengeToken: challenge.payment_challenge_token,
-      paymentProof: {
-        proof_token: challenge.payment_challenge_token,
-        payer_wallet_address: trimmedWallet,
-        facilitator_tx_ref: `demo-${Date.now()}`,
-      },
+      paymentProof: authorization.payment_proof,
+      xPaymentHeader: authorization.x_payment_header,
     });
 
     if (result.kind === "payment_required") {
@@ -273,7 +286,13 @@ export function AgentChat() {
             ))}
             <button
               type="button"
-              onClick={() => submitMessage(MALICIOUS_DEMO_PROMPT, { autoCompletePayment: true })}
+              onClick={() => {
+                const demoPrompt = input.trim() || MALICIOUS_DEMO_PROMPT;
+                if (!confirmLiveSlashDemo()) {
+                  return;
+                }
+                void submitMessage(demoPrompt, { autoCompletePayment: true });
+              }}
               disabled={isLoading || isPaying}
               className="px-3 py-2 rounded-full border border-red-500/30 bg-red-500/10 text-xs text-red-300 hover:bg-red-500/20 disabled:opacity-50 inline-flex items-center gap-2"
             >
@@ -282,7 +301,7 @@ export function AgentChat() {
             </button>
           </div>
           <p className="text-xs text-neutral-500">
-            Use the red action to replay a malicious refund attempt through challenge, on-chain payment, anomaly flag, and automatic slash.
+            Load the attack prompt first, then explicitly send it to replay challenge, payment, anomaly flag, and slash.
           </p>
         </div>
       </div>

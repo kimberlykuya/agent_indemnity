@@ -13,6 +13,7 @@ try:
     from backend.api.routes import router
     from backend.api.websocket_manager import WebSocketManager
     from backend.services.chat_service import ChatService
+    from backend.services.circle_payment_service import CirclePaymentService
     from backend.services.event_store import EventStore
     from backend.services.metrics_service import MetricsService
     from backend.services.payment_gateway import PaymentGateway
@@ -21,6 +22,7 @@ except ImportError:  # pragma: no cover - Railway root_directory="backend" fallb
     from api.routes import router
     from api.websocket_manager import WebSocketManager
     from services.chat_service import ChatService
+    from services.circle_payment_service import CirclePaymentService
     from services.event_store import EventStore
     from services.metrics_service import MetricsService
     from services.payment_gateway import PaymentGateway
@@ -36,6 +38,7 @@ async def lifespan(app: FastAPI):
     app.state.event_store = event_store
     app.state.websocket_manager = WebSocketManager()
     app.state.payment_gateway = PaymentGateway()
+    app.state.circle_payment_service = CirclePaymentService(app.state.payment_gateway)
     app.state.chat_service = ChatService(payment_gateway=app.state.payment_gateway)
     app.state.metrics_service = MetricsService(event_store)
     app.state.utcnow = lambda: datetime.now(timezone.utc)

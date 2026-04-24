@@ -7,6 +7,7 @@ import os
 import secrets
 from threading import Lock
 from urllib.parse import urlparse
+from pathlib import Path
 
 import httpx
 
@@ -84,6 +85,7 @@ class PaymentGateway:
         self._now_factory = now_factory or _utcnow
         self._lock = Lock()
         self._challenges: dict[str, PaymentChallenge] = {}
+        self._mock_mode = self._env_flag("CIRCLE_MOCK_MODE")
 
     @property
     def payment_network(self) -> str:
@@ -96,9 +98,36 @@ class PaymentGateway:
 
     @property
     def gateway_mode(self) -> str:
+        if self._mock_mode:
+            return "stub"
         if os.getenv("PAYMENT_GATEWAY_MODE"):
             return os.getenv("PAYMENT_GATEWAY_MODE", "stub").strip().lower()
         return "facilitator" if self.facilitator_url else "stub"
+
+    @staticmethod
+    def _is_truthy(value: str | None) -> bool:
+        return value is not None and value.strip().lower() in {"1", "true", "yes", "on"}
+
+    def _env_flag(self, name: str) -> bool:
+        value = os.getenv(name)
+        if self._is_truthy(value):
+            return True
+
+        repo_root = Path(__file__).resolve().parent.parent.parent
+        for candidate in (
+            repo_root / ".env",
+            repo_root / "dev-controlled-projects" / ".env",
+        ):
+            if not candidate.exists():
+                continue
+            for line in candidate.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#") or "=" not in stripped:
+                    continue
+                key, raw = stripped.split("=", 1)
+                if key.strip() == name:
+                    return self._is_truthy(raw)
+        return False
 
     def create_challenge(
         self,
@@ -145,7 +174,53 @@ class PaymentGateway:
         if self.facilitator_url:
             instructions["facilitator_url"] = self.facilitator_url
             instructions["gateway_mode"] = self.gateway_mode
+        instructions["x402_typed_data"] = self.build_typed_data(challenge)
         return instructions
+
+    def get_challenge(self, token: str) -> PaymentChallenge:
+        return self._get_challenge(token)
+
+    def build_typed_data(self, challenge: PaymentChallenge) -> dict[str, object]:
+        chain_id_raw = os.getenv("ARC_CHAIN_ID", "5042002")
+        try:
+            chain_id = int(chain_id_raw)
+        except ValueError:
+            chain_id = 5042002
+        return {
+            "types": {
+                "EIP712Domain": [
+                    {"name": "name", "type": "string"},
+                    {"name": "version", "type": "string"},
+                    {"name": "chainId", "type": "uint256"},
+                ],
+                "PaymentAuthorization": [
+                    {"name": "challengeToken", "type": "string"},
+                    {"name": "messageHash", "type": "string"},
+                    {"name": "userId", "type": "string"},
+                    {"name": "beneficiaryWallet", "type": "string"},
+                    {"name": "routeCategory", "type": "string"},
+                    {"name": "priceUsdcMicros", "type": "uint256"},
+                    {"name": "expiresAt", "type": "uint256"},
+                    {"name": "facilitator", "type": "string"},
+                ],
+            },
+            "primaryType": "PaymentAuthorization",
+            "domain": {
+                "name": "AgentIndemnityX402",
+                "version": "1",
+                "chainId": chain_id,
+            },
+            "message": {
+                "challengeToken": challenge.token,
+                "messageHash": challenge.message_hash,
+                "userId": challenge.user_id,
+                "beneficiaryWallet": challenge.user_wallet_address,
+                "routeCategory": challenge.route_category,
+                "priceUsdcMicros": int(challenge.price_usdc * 1_000_000),
+                "expiresAt": int(challenge.expires_at.timestamp()),
+                "facilitator": self.facilitator_url or "",
+            },
+        }
 
     def verify_payment(
         self,
@@ -267,6 +342,15 @@ class PaymentGateway:
         facilitator_tx_ref: str,
         payment_proof: dict[str, object],
     ) -> PaymentSettlement:
+        if self._mock_mode:
+            return PaymentSettlement(
+                payment_ref=str(payment_proof.get("payment_tx_hash") or f"x402:{facilitator_tx_ref}"),
+                payer_wallet_address=user_wallet_address,
+                route_category=challenge.route_category,
+                route_confidence=challenge.route_confidence,
+                price_usdc=challenge.price_usdc,
+                settlement_source="stub_authorization",
+            )
         if not self.facilitator_url:
             raise PaymentGatewayError(
                 "PAYMENT_GATEWAY_MODE=facilitator requires X402_FACILITATOR_URL.",
@@ -288,6 +372,9 @@ class PaymentGateway:
         headers = {"Content-Type": "application/json"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
+        x_payment_header = str(payment_proof.get("x_payment_header") or "").strip()
+        if x_payment_header:
+            headers["X-PAYMENT"] = x_payment_header
 
         payload = {
             "challenge_token": challenge_token,
@@ -300,6 +387,7 @@ class PaymentGateway:
                 "message_hash": challenge.message_hash,
             },
             "payment_proof": payment_proof,
+            "typed_data": self.build_typed_data(challenge),
         }
 
         try:

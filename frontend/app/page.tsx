@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { connectSocket, disconnectSocket } from "../lib/socket";
 import { useAgentStore } from "../store/useAgentStore";
-import { getBondStatus, getTransactions, sendChatMessage } from "../lib/api";
+import { authorizeCirclePayment, getBondStatus, getTransactions, sendChatMessage } from "../lib/api";
 import { TxFeed } from "../components/TxFeed";
 import { BondBalance } from "../components/BondBalance";
 import { BondChart } from "../components/BondChart";
@@ -85,19 +85,32 @@ export default function ComplianceDashboard() {
         });
 
         if (challenge.kind === "payment_required") {
+          const authorization = await authorizeCirclePayment({
+            message,
+            userId: "demo-sequence",
+            userWalletAddress: "0x191cc4e34e54444b9e10f4e3311c87382b0c0654",
+            paymentChallengeToken: challenge.payment_challenge_token,
+            signal: controller.signal,
+          });
           const result = await sendChatMessage({
             message,
             userId: "demo-sequence",
             userWalletAddress: "0x191cc4e34e54444b9e10f4e3311c87382b0c0654",
             paymentChallengeToken: challenge.payment_challenge_token,
-            paymentProof: {
-              proof_token: challenge.payment_challenge_token,
-              payer_wallet_address: "0x191cc4e34e54444b9e10f4e3311c87382b0c0654",
-              facilitator_tx_ref: `demo-sequence-${Date.now()}`,
-            },
+            paymentProof: authorization.payment_proof,
+            xPaymentHeader: authorization.x_payment_header,
             signal: controller.signal,
           });
-          setTransactionContext(result.payment_ref ?? "", {
+
+          if (result.kind !== "chat_response") {
+            setTransactionContext("", {
+              prompt: message,
+              reply: "Payment retry returned another challenge.",
+            });
+            continue;
+          }
+
+          setTransactionContext(result.payment_ref, {
             prompt: message,
             reply: result.reply,
           });

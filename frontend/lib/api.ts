@@ -7,6 +7,10 @@ export type PaymentProof = {
   payer_wallet_address: string;
   facilitator_tx_ref: string;
   payment_tx_hash?: string;
+  circle_wallet_id?: string;
+  circle_wallet_address?: string;
+  x_payment_header?: string;
+  x_payment_payload?: Record<string, unknown>;
 };
 
 export type ChatResponse = {
@@ -49,6 +53,14 @@ export type PaymentChallengeResponse = {
 
 export type SendChatResult = ChatResponse | PaymentChallengeResponse;
 
+export type CircleAuthorizeResponse = {
+  payment_challenge_token: string;
+  circle_wallet_id: string;
+  circle_wallet_address: string;
+  x_payment_header: string;
+  payment_proof: PaymentProof;
+};
+
 export type TransactionRecord = {
   type: "request_paid" | "bond_slashed" | "bond_topped_up" | "anomaly_flagged";
   amount: number;
@@ -85,6 +97,7 @@ type SendChatMessageInput = {
   userWalletAddress: string;
   paymentChallengeToken?: string;
   paymentProof?: PaymentProof;
+  xPaymentHeader?: string;
   signal?: AbortSignal;
 };
 
@@ -94,11 +107,16 @@ export async function sendChatMessage({
   userWalletAddress,
   paymentChallengeToken,
   paymentProof,
+  xPaymentHeader,
   signal,
 }: SendChatMessageInput): Promise<SendChatResult> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (xPaymentHeader) {
+    headers["X-PAYMENT"] = xPaymentHeader;
+  }
   const response = await fetch(`${API_URL}/agent/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({
       message,
       user_id: userId,
@@ -145,6 +163,48 @@ export async function getTransactions(): Promise<TransactionRecord[]> {
 
   if (!response.ok) {
     throw new Error(`Failed to load transactions: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+export async function authorizeCirclePayment({
+  message,
+  userId,
+  userWalletAddress,
+  paymentChallengeToken,
+  signal,
+}: {
+  message: string;
+  userId: string;
+  userWalletAddress: string;
+  paymentChallengeToken: string;
+  signal?: AbortSignal;
+}): Promise<CircleAuthorizeResponse> {
+  const response = await fetch(`${API_URL}/payments/circle/authorize`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message,
+      user_id: userId,
+      user_wallet_address: userWalletAddress,
+      payment_challenge_token: paymentChallengeToken,
+    }),
+    signal,
+  });
+
+  if (!response.ok) {
+    let message = `API error: ${response.statusText}`;
+    try {
+      const payload = await response.json();
+      const detail = payload?.detail?.message;
+      if (typeof detail === "string" && detail.trim()) {
+        message = detail;
+      }
+    } catch {
+      // Ignore invalid payloads.
+    }
+    throw new Error(message);
   }
 
   return response.json();

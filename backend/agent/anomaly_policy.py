@@ -46,6 +46,13 @@ def _map_reason_to_type(reason: str | None) -> tuple[AnomalyType, bool]:
     return AnomalyType.JAILBREAK, False
 
 
+def should_recommend_slash(reason: str | None) -> bool:
+    if not reason:
+        return False
+    _, slash_recommended = _map_reason_to_type(reason)
+    return slash_recommended
+
+
 async def check_anomaly(
     user_message: str,
     agent_reply: str,

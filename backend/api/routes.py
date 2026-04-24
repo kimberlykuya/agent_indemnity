@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+import json
 import os
 
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
@@ -13,6 +14,8 @@ from .schemas import (
     BondStatusResponse,
     ChatRequest,
     ChatResponse,
+    CircleAuthorizeRequest,
+    CircleAuthorizeResponse,
     HealthResponse,
     RouteMetricsResponse,
     SettlementMetricsResponse,
@@ -30,6 +33,14 @@ try:
     from backend.services.chat_service import ChatServiceError, PaymentRequiredError
 except ImportError:  # pragma: no cover - compatibility fallback
     from services.chat_service import ChatServiceError, PaymentRequiredError
+try:
+    from backend.services.payment_gateway import PaymentGatewayError
+except ImportError:  # pragma: no cover - compatibility fallback
+    from services.payment_gateway import PaymentGatewayError
+try:
+    from backend.services.circle_payment_service import CirclePaymentServiceError
+except ImportError:  # pragma: no cover - compatibility fallback
+    from services.circle_payment_service import CirclePaymentServiceError
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +65,18 @@ def _utcnow(request: Request) -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _extract_payment_proof(request: Request, payload: ChatRequest) -> dict | None:
+    proof = payload.payment_proof.model_dump() if payload.payment_proof else {}
+    x_payment_header = request.headers.get("X-PAYMENT", "").strip()
+    if x_payment_header:
+        proof["x_payment_header"] = x_payment_header
+        try:
+            proof["x_payment_payload"] = json.loads(x_payment_header)
+        except json.JSONDecodeError:
+            proof["x_payment_payload"] = {"raw": x_payment_header}
+    return proof or None
+
+
 @router.get("/health", response_model=HealthResponse)
 async def get_health() -> HealthResponse:
     return HealthResponse(status="ok")
@@ -68,7 +91,7 @@ async def post_agent_chat(request: Request, payload: ChatRequest) -> ChatRespons
             user_id=payload.user_id,
             user_wallet_address=payload.user_wallet_address,
             payment_challenge_token=payload.payment_challenge_token,
-            payment_proof=payload.payment_proof.model_dump() if payload.payment_proof else None,
+            payment_proof=_extract_payment_proof(request, payload),
         )
     except PaymentRequiredError as exc:
         return JSONResponse(status_code=402, content=exc.payload.model_dump(mode="json"))
@@ -147,6 +170,35 @@ async def post_agent_chat(request: Request, payload: ChatRequest) -> ChatRespons
                 )
 
     return response
+
+
+@router.post("/payments/circle/authorize", response_model=CircleAuthorizeResponse)
+async def post_circle_authorize(request: Request, payload: CircleAuthorizeRequest) -> CircleAuthorizeResponse:
+    try:
+        authorization = await run_in_threadpool(
+            request.app.state.circle_payment_service.authorize_payment,
+            message=payload.message,
+            user_id=payload.user_id,
+            user_wallet_address=payload.user_wallet_address,
+            challenge_token=payload.payment_challenge_token,
+        )
+    except CirclePaymentServiceError as exc:
+        logger.exception("Circle payment authorization failed")
+        raise _http_error(exc.status_code, exc.code, exc.message) from exc
+    except PaymentGatewayError as exc:  # type: ignore[name-defined]
+        logger.exception("Circle payment authorization challenge validation failed")
+        raise _http_error(exc.status_code, exc.code, exc.message) from exc
+    except Exception as exc:  # pragma: no cover - safety net
+        logger.exception("Unexpected Circle payment authorization failure")
+        raise _http_error(500, "internal_error", "Unexpected server error") from exc
+
+    return CircleAuthorizeResponse(
+        payment_challenge_token=authorization.challenge_token,
+        circle_wallet_id=authorization.circle_wallet_id,
+        circle_wallet_address=authorization.circle_wallet_address,
+        x_payment_header=authorization.x_payment_header,
+        payment_proof=authorization.payment_proof,
+    )
 
 
 def _perform_bond_slash(victim_address: str, payout_amount: float, timestamp: datetime) -> SlashResponse:

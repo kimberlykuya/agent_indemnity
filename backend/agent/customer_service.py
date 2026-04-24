@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 
 from agent import config
 from agent.anomaly_detector import detect_anomaly
+from agent.anomaly_policy import should_recommend_slash
 from agent.model_clients import (
     ModelClientError,
     call_featherless,
@@ -209,19 +210,20 @@ def handle_paid_request(
     anomaly = detect_anomaly(message, reply, route)
     original_reply = reply
     beneficiary_wallet_address = _beneficiary_wallet_for_request(user_id, user_wallet_address)
+    slash_recommended = anomaly["flagged"] and should_recommend_slash(anomaly.get("reason"))
 
     if anomaly["flagged"]:
         reply = _FLAGGED_REFUSAL_REPLY
 
     auto_slash_enabled = _env_flag("AUTO_SLASH_ON_FLAGGED", True)
-    slash_mode = "auto" if anomaly["flagged"] and auto_slash_enabled else "none"
+    slash_mode = "auto" if slash_recommended and auto_slash_enabled else "none"
     slash_executed = False
     slash_tx_hash = None
     slash_payout = None
     slash_victim_address = None
     slash_error = None
 
-    if anomaly["flagged"] and auto_slash_enabled and payment_status == "settled":
+    if slash_recommended and auto_slash_enabled and payment_status == "settled":
         default_payout = _env_positive_float(
             "AUTO_SLASH_PAYOUT_USDC",
             _env_positive_float("SLASH_PAYOUT_USDC", 1.0),
@@ -258,7 +260,7 @@ def handle_paid_request(
                 min_payout,
                 available_bond,
             )
-    elif anomaly["flagged"] and auto_slash_enabled and payment_status != "settled":
+    elif slash_recommended and auto_slash_enabled and payment_status != "settled":
         slash_error = "Automatic slash skipped because request settlement did not complete on-chain."
 
     latency_ms = int((time.monotonic() - t0) * 1000)
