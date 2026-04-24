@@ -31,8 +31,22 @@ _BOND_ABI = [
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "amount", "type": "uint256"}],
+        "name": "topUpBond",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function",
     }
 ]
+
+
+def _get_contract(w3):
+    return w3.eth.contract(
+        address=w3.to_checksum_address(PERFORMANCE_BOND_ADDR),
+        abi=_BOND_ABI,
+    )
 
 
 def get_bond_balance() -> float:
@@ -45,15 +59,43 @@ def get_bond_balance() -> float:
         return 0.0
     try:
         w3 = get_web3()
-        contract = w3.eth.contract(
-            address=w3.to_checksum_address(PERFORMANCE_BOND_ADDR),
-            abi=_BOND_ABI,
-        )
+        contract = _get_contract(w3)
         raw: int = contract.functions.getBondBalance().call()
         return raw / 1_000_000  # USDC has 6 decimal places
     except Exception as exc:
         logger.warning({"error": str(exc)}, "get_bond_balance failed")
         return 0.0
+
+
+def pay_premium(amount_usdc: float) -> str:
+    """Submit an on-chain topUpBond transaction and return the tx hash."""
+    from blockchain.arc_client import DEPLOYER_PRIVATE_KEY
+
+    if amount_usdc <= 0:
+        raise ValueError("Premium amount must be greater than zero")
+    if not PERFORMANCE_BOND_ADDR or not DEPLOYER_PRIVATE_KEY:
+        raise ValueError("Missing PERFORMANCE_BOND_ADDRESS or DEPLOYER_PRIVATE_KEY")
+
+    w3 = get_web3()
+    contract = _get_contract(w3)
+    account = w3.eth.account.from_key(DEPLOYER_PRIVATE_KEY)
+    amount_raw = int(amount_usdc * 1_000_000)
+
+    try:
+        tx = contract.functions.topUpBond(amount_raw).build_transaction(
+            {
+                "from": account.address,
+                "nonce": w3.eth.get_transaction_count(account.address),
+            }
+        )
+        signed_tx = w3.eth.account.sign_transaction(tx, private_key=DEPLOYER_PRIVATE_KEY)
+        tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)  # type: ignore[attr-defined]
+        hex_hash = tx_hash.hex()
+        logger.info({"amount": amount_usdc, "tx_hash": hex_hash}, "pay_premium executed on-chain")
+        return hex_hash
+    except Exception as exc:
+        logger.error({"error": str(exc), "amount": amount_usdc}, "Failed to execute topUpBond transaction")
+        raise
 
 
 def slash_bond(victim_address: str, payout_amount_usdc: float) -> str:
@@ -63,10 +105,7 @@ def slash_bond(victim_address: str, payout_amount_usdc: float) -> str:
         raise ValueError("Missing PERFORMANCE_BOND_ADDRESS or DEPLOYER_PRIVATE_KEY")
     
     w3 = get_web3()
-    contract = w3.eth.contract(
-        address=w3.to_checksum_address(PERFORMANCE_BOND_ADDR),
-        abi=_BOND_ABI,
-    )
+    contract = _get_contract(w3)
     
     account = w3.eth.account.from_key(DEPLOYER_PRIVATE_KEY)
     amount_raw = int(payout_amount_usdc * 1_000_000)

@@ -1,9 +1,8 @@
 import { create } from 'zustand';
-import { ChatResponse } from '../lib/api';
+import { TransactionRecord } from '../lib/api';
 
-export type Transaction = ChatResponse & {
+export type Transaction = TransactionRecord & {
   id: string;
-  timestamp: number;
 };
 
 interface AgentState {
@@ -11,7 +10,8 @@ interface AgentState {
   bondBalance: number;
   anomaliesCount: number;
   routeCounts: Record<string, number>;
-  addTransaction: (tx: ChatResponse) => void;
+  setTransactions: (transactions: TransactionRecord[]) => void;
+  addTransaction: (tx: TransactionRecord) => void;
   slashBond: (amount: number) => void;
   setBondBalance: (balance: number) => void;
 }
@@ -25,24 +25,68 @@ export const useAgentStore = create<AgentState>((set) => ({
   routeCounts: {
     general: 0,
     technical: 0,
-    legal_risk: 0,
-    fallback_complex: 0,
+    legal: 0,
+    fallback: 0,
   },
-  
+
+  setTransactions: (transactions) => set(() => {
+    const normalized = transactions.map((tx) => ({
+      ...tx,
+      id: `${tx.type}-${tx.timestamp}-${tx.payment_ref ?? tx.tx_hash ?? tx.amount}`,
+    }));
+
+    const routeCounts = {
+      general: 0,
+      technical: 0,
+      legal: 0,
+      fallback: 0,
+    };
+
+    let anomaliesCount = 0;
+    for (const tx of normalized) {
+      if (tx.type === "request_paid" && tx.route_category && tx.route_category in routeCounts) {
+        routeCounts[tx.route_category as keyof typeof routeCounts] += 1;
+      }
+      if ((tx.type === "request_paid" || tx.type === "anomaly_flagged") && tx.flagged) {
+        anomaliesCount += 1;
+      }
+    }
+
+    return {
+      transactions: normalized,
+      anomaliesCount,
+      routeCounts,
+    };
+  }),
+
   addTransaction: (tx) => set((state) => {
     const newTx: Transaction = {
       ...tx,
-      id: Math.random().toString(36).substring(7),
-      timestamp: Date.now(),
+      id: `${tx.type}-${tx.timestamp}-${tx.payment_ref ?? tx.tx_hash ?? tx.amount}`,
     };
-    
-    return {
-      transactions: [newTx, ...state.transactions].slice(0, 100), // Keep last 100
-      anomaliesCount: state.anomaliesCount + (tx.flagged ? 1 : 0),
-      routeCounts: {
-        ...state.routeCounts,
-        [tx.route_category]: (state.routeCounts[tx.route_category] || 0) + 1,
+
+    const deduped = [newTx, ...state.transactions.filter((existing) => existing.id !== newTx.id)].slice(0, 100);
+    const routeCounts = {
+      general: 0,
+      technical: 0,
+      legal: 0,
+      fallback: 0,
+    };
+
+    let anomaliesCount = 0;
+    for (const item of deduped) {
+      if (item.type === "request_paid" && item.route_category && item.route_category in routeCounts) {
+        routeCounts[item.route_category as keyof typeof routeCounts] += 1;
       }
+      if ((item.type === "request_paid" || item.type === "anomaly_flagged") && item.flagged) {
+        anomaliesCount += 1;
+      }
+    }
+
+    return {
+      transactions: deduped,
+      anomaliesCount,
+      routeCounts,
     };
   }),
 

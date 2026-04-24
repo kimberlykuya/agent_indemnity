@@ -41,6 +41,7 @@ def demo_results(tmp_path_factory):
     results = []
     with patch("agent.customer_service.call_featherless", return_value=_MOCK_REPLY), \
          patch("agent.customer_service.call_gemini_fallback", return_value=_MOCK_REPLY), \
+         patch("agent.customer_service.pay_premium", return_value="0xpremium"), \
          patch("agent.customer_service._LOG_FILE", log):
         for pid, msg, uid in _DEMO_PROMPTS:
             r = handle_request(msg, uid)

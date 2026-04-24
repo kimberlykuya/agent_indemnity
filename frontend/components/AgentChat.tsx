@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, ShieldAlert } from "lucide-react";
+import { Send, Bot, User } from "lucide-react";
 import { sendChatMessage } from "../lib/api";
-import { useAgentStore } from "../store/useAgentStore";
 import { cn } from "../lib/utils";
 
 interface Message {
@@ -27,8 +26,6 @@ export function AgentChat() {
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   
-  const addTransaction = useAgentStore(state => state.addTransaction);
-
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -46,11 +43,7 @@ export function AgentChat() {
 
     try {
       const result = await sendChatMessage(userMsg);
-      
-      // Update global feed
-      addTransaction(result);
 
-      // Add assistant response
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: "assistant",
@@ -60,10 +53,11 @@ export function AgentChat() {
         flagged: result.flagged
       }]);
     } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : "Sorry, a network error occurred.";
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "Sorry, a network error occurred.",
+        content: errorMessage,
       }]);
     } finally {
       setIsLoading(false);

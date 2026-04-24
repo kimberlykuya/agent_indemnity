@@ -9,7 +9,6 @@ import { cn } from "../lib/utils";
 
 export function BondBalance() {
   const balance = useAgentStore((state) => state.bondBalance);
-  const triggerSlash = useAgentStore((state) => state.slashBond);
   const [isSlashing, setIsSlashing] = useState(false);
 
   const handleSlash = async () => {
@@ -18,7 +17,6 @@ export function BondBalance() {
     
     try {
       const { hash } = await slashBond();
-      triggerSlash(500); // Penalty amount
       toast.success(
         <div className="flex flex-col gap-1">
           <span className="font-semibold text-emerald-400">Slash Successful</span>
@@ -26,7 +24,7 @@ export function BondBalance() {
         </div>, 
         { id: "slash", duration: 5000 }
       );
-    } catch (e) {
+    } catch {
       toast.error("Failed to execute slash", { id: "slash" });
     } finally {
       setIsSlashing(false);
@@ -61,7 +59,7 @@ export function BondBalance() {
         className="w-full mt-4 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-lg font-medium transition-colors focus:ring-2 ring-red-500/50 outline-none"
       >
         <ShieldAlert className="w-4 h-4" />
-        {isSlashing ? "Executing Slash..." : "Slash Bond ($500)"}
+        {isSlashing ? "Executing Manual Slash..." : "Manual Slash Bond ($500)"}
       </button>
     </div>
   );

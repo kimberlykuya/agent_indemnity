@@ -92,6 +92,7 @@ async def post_agent_chat(request: Request, payload: ChatRequest) -> ChatRespons
             "payment_ref": response.payment_ref,
             "flagged": response.flagged,
             "timestamp": response.timestamp,
+            "bond_balance": response.bond_balance,
         },
     )
 

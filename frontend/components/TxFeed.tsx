@@ -2,7 +2,6 @@
 
 import { useAgentStore } from "../store/useAgentStore";
 import { cn } from "../lib/utils";
-import { formatDistanceToNow } from "date-fns";
 
 export function TxFeed() {
   const transactions = useAgentStore((state) => state.transactions);
@@ -21,38 +20,53 @@ export function TxFeed() {
         {transactions.length === 0 ? (
           <div className="text-neutral-500 text-center py-8">Waiting for incoming traffic...</div>
         ) : (
-          transactions.map((tx) => (
-            <div 
-              key={tx.id} 
-              className="flex items-start justify-between gap-4 p-3 rounded-md bg-neutral-950 border border-neutral-800/50 hover:border-neutral-700 transition-colors"
-            >
-              <div className="flex-1 space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className={cn(
-                    "px-1.5 py-0.5 rounded text-[10px] uppercase font-semibold",
-                    tx.flagged ? "bg-red-500/20 text-red-400" : 
-                    tx.route_category === "general" ? "bg-blue-500/20 text-blue-400" :
-                    tx.route_category === "technical" ? "bg-amber-500/20 text-amber-400" :
-                    tx.route_category === "legal_risk" ? "bg-purple-500/20 text-purple-400" :
-                    "bg-neutral-500/20 text-neutral-400"
-                  )}>
-                    {tx.route_category}
-                  </span>
-                  <span className="text-neutral-500">{tx.model.split('/').pop()}</span>
+          transactions.map((tx) => {
+            const preview =
+              tx.type === "bond_slashed"
+                ? `Bond slash executed${tx.tx_hash ? ` (${tx.tx_hash.slice(0, 12)}...)` : ""}`
+                : tx.payment_ref || "Premium request recorded";
+            const amountLabel =
+              tx.type === "bond_slashed" ? `$${tx.amount.toFixed(2)} USDC` : `$${tx.amount.toFixed(3)} USDC`;
+            const statusLabel =
+              tx.type === "bond_slashed"
+                ? tx.tx_hash ? "on-chain" : "slash"
+                : tx.status || "pending";
+            const badgeLabel = tx.type === "bond_slashed" ? "bond" : (tx.route_category || "system");
+
+            return (
+              <div 
+                key={tx.id} 
+                className="flex items-start justify-between gap-4 p-3 rounded-md bg-neutral-950 border border-neutral-800/50 hover:border-neutral-700 transition-colors"
+              >
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      "px-1.5 py-0.5 rounded text-[10px] uppercase font-semibold",
+                      tx.type === "bond_slashed" ? "bg-emerald-500/20 text-emerald-400" :
+                      tx.flagged ? "bg-red-500/20 text-red-400" :
+                      tx.route_category === "general" ? "bg-blue-500/20 text-blue-400" :
+                      tx.route_category === "technical" ? "bg-amber-500/20 text-amber-400" :
+                      tx.route_category === "legal" ? "bg-purple-500/20 text-purple-400" :
+                      "bg-neutral-500/20 text-neutral-400"
+                    )}>
+                      {badgeLabel}
+                    </span>
+                    <span className="text-neutral-500">{tx.model?.split('/').pop() || tx.type}</span>
+                  </div>
+                  <p className={cn("text-sm", tx.flagged ? "text-red-300" : "text-neutral-300")}>
+                    &quot;{preview.substring(0, 60)}{preview.length > 60 ? '...' : ''}&quot;
+                  </p>
+                  {tx.tx_hash && (
+                    <p className="text-neutral-500 text-[10px] font-mono">{tx.tx_hash}</p>
+                  )}
                 </div>
-                <p className={cn("text-sm", tx.flagged ? "text-red-300" : "text-neutral-300")}>
-                  "{tx.reply.substring(0, 60)}{tx.reply.length > 60 ? '...' : ''}"
-                </p>
-                {tx.flagged && (
-                  <p className="text-red-400 text-[10px]">↳ {tx.anomaly_reason}</p>
-                )}
+                <div className="text-right flex flex-col gap-1 items-end shrink-0">
+                  <span className="text-neutral-400">{amountLabel}</span>
+                  <span className="text-neutral-600">{statusLabel}</span>
+                </div>
               </div>
-              <div className="text-right flex flex-col gap-1 items-end shrink-0">
-                <span className="text-neutral-400">${tx.price_usdc.toFixed(3)} USDC</span>
-                <span className="text-neutral-600">{tx.latency_ms}ms</span>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

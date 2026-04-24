@@ -45,6 +45,14 @@ class ChatService:
         except Exception as exc:
             raise ChatServiceError("Failed to process chat request", status_code=502) from exc
 
+        raw_payment_status = raw.get("payment_status")
+        if raw_payment_status == "provider_error":
+            raise ChatServiceError(
+                "Upstream provider unavailable",
+                status_code=502,
+                code="provider_unavailable",
+            )
+
         try:
             bond_balance = self._bond_balance_reader()
         except Exception as exc:
@@ -56,7 +64,7 @@ class ChatService:
                 model=raw["model"],
                 route_category=self._normalize_route(raw["route_category"]),
                 price_usdc=raw["price_usdc"],
-                payment_status=self._normalize_payment_status(raw.get("payment_status")),
+                payment_status=self._normalize_payment_status(raw_payment_status),
                 bond_balance=bond_balance,
                 flagged=bool(raw.get("flagged", False)),
                 payment_ref=self._payment_ref(raw),
@@ -76,7 +84,9 @@ class ChatService:
 
     @staticmethod
     def _normalize_payment_status(payment_status: str | None) -> str:
-        if payment_status == "provider_error":
+        if payment_status == "settled":
+            return "settled"
+        if payment_status in {"provider_error", "payment_failed", "failed"}:
             return "failed"
         return "authorized"
 

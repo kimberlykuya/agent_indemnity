@@ -1,12 +1,44 @@
 "use client";
 
+import { useEffect } from "react";
 import { AgentChat } from "../../components/AgentChat";
 import { PayoutAlert } from "../../components/PayoutAlert";
+import { connectSocket, disconnectSocket } from "../../lib/socket";
+import { getBondStatus, getTransactions } from "../../lib/api";
+import { useAgentStore } from "../../store/useAgentStore";
 import { ShieldCheck, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
 import { Toaster } from "sonner";
 
 export default function CustomerDemo() {
+  const setTransactions = useAgentStore((state) => state.setTransactions);
+  const setBondBalance = useAgentStore((state) => state.setBondBalance);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const bootstrap = async () => {
+      try {
+        const [transactions, bondStatus] = await Promise.all([
+          getTransactions(),
+          getBondStatus(),
+        ]);
+        if (!isActive) return;
+        setTransactions(transactions);
+        setBondBalance(bondStatus.balance);
+      } catch (error) {
+        console.error("Failed to bootstrap demo state", error);
+      }
+    };
+
+    bootstrap();
+    connectSocket();
+    return () => {
+      isActive = false;
+      disconnectSocket();
+    };
+  }, [setBondBalance, setTransactions]);
+
   return (
     <div className="min-h-screen bg-black text-neutral-200 p-4 md:p-8 font-sans selection:bg-emerald-500/30 flex justify-center items-center">
       <Toaster theme="dark" position="top-right" />

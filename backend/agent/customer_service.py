@@ -31,6 +31,11 @@ from agent.prompts import (
 )
 from agent.router import route_message
 
+try:
+    from backend.blockchain.bond_manager import pay_premium
+except ImportError:  # pragma: no cover - compatibility fallback
+    from blockchain.bond_manager import pay_premium
+
 logger = logging.getLogger(__name__)
 
 _LOG_FILE = pathlib.Path(__file__).parent.parent / "logs" / "demo_transactions.json"
@@ -80,21 +85,27 @@ def handle_request(message: str, user_id: str = "demo-user") -> dict:
 
     # 3. Payment record
     payment = create_payment_record(user_id, route, price)
+    payment_status = payment["payment_status"]
+    payment_ref = payment.get("payment_ref")
 
     # 4. Generate reply
     try:
         reply, model_id = _generate_reply(route, message)
-        payment_status = payment["payment_status"]
     except ModelClientError as exc:
         logger.error("Provider call failed: route=%s error=%s", route, exc)
         reply      = "I'm sorry, I'm unable to process your request right now. Please try again."
         model_id   = config.MODEL_MAP[route]
         payment_status = "provider_error"
+    else:
+        try:
+            payment_ref = pay_premium(price)
+            payment_status = "settled"
+        except Exception as exc:
+            logger.error("Premium payment failed: route=%s price=%s error=%s", route, price, exc)
+            payment_status = "payment_failed"
 
     # 5. Anomaly detection
     anomaly = detect_anomaly(message, reply, route)
-    if anomaly["flagged"]:
-        payment_status = "flagged"
 
     # 6. Latency
     latency_ms = int((time.monotonic() - t0) * 1000)
@@ -106,6 +117,7 @@ def handle_request(message: str, user_id: str = "demo-user") -> dict:
         "route_confidence": route_decision["confidence"],
         "price_usdc":       price,
         "payment_status":   payment_status,
+        "payment_ref":      payment_ref,
         "flagged":          anomaly["flagged"],
         "anomaly_reason":   anomaly["reason"],
         "latency_ms":       latency_ms,

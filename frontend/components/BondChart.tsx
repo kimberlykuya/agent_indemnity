@@ -1,50 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAgentStore } from "../store/useAgentStore";
 
-interface DataPoint {
-  time: string;
-  value: number;
-}
-
 export function BondChart() {
   const currentBalance = useAgentStore((state) => state.bondBalance);
-  const [data, setData] = useState<DataPoint[]>([]);
 
-  // Initialize historical mock data and subscribe to live balance
-  useEffect(() => {
-    const history: DataPoint[] = [];
-    let val = 10000;
+  const data = useMemo(() => {
     const now = new Date();
-    
-    // Generate 20 historical points
-    for (let i = 20; i >= 0; i--) {
-      const t = new Date(now.getTime() - i * 60000);
-      // Small random walk to simulate older slashes
-      if (Math.random() > 0.9) val -= 500;
-      history.push({
-        time: t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        value: val
-      });
-    }
-    
-    // Replace the last point with current real balance to align history and live
-    history[history.length - 1].value = currentBalance;
-    setData(history);
-  }, []);
+    const step = (10000 - currentBalance) / 6;
 
-  // Update chart when live balance drops
-  useEffect(() => {
-    if (data.length === 0) return;
-    
-    // Only add a new point if balance actually changed
-    const lastPoint = data[data.length - 1];
-    if (lastPoint.value !== currentBalance) {
-      const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      setData(prev => [...prev.slice(1), { time: t, value: currentBalance }]);
-    }
+    return Array.from({ length: 7 }, (_, index) => {
+      const pointTime = new Date(now.getTime() - (6 - index) * 60000);
+      const value = index === 6 ? currentBalance : Math.max(currentBalance, Math.round(10000 - step * index));
+      return {
+        time: pointTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        value,
+      };
+    });
   }, [currentBalance]);
 
   return (

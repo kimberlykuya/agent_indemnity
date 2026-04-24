@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { connectMockSocket, disconnectMockSocket } from "../lib/socket";
+import { useEffect } from "react";
+import { connectSocket, disconnectSocket } from "../lib/socket";
 import { useAgentStore } from "../store/useAgentStore";
+import { getBondStatus, getTransactions } from "../lib/api";
 import { TxFeed } from "../components/TxFeed";
 import { BondBalance } from "../components/BondBalance";
 import { BondChart } from "../components/BondChart";
@@ -15,13 +16,33 @@ export default function ComplianceDashboard() {
   const anomaliesCount = useAgentStore((state) => state.anomaliesCount);
   const routeCounts = useAgentStore((state) => state.routeCounts);
   const transactions = useAgentStore((state) => state.transactions);
+  const setTransactions = useAgentStore((state) => state.setTransactions);
+  const setBondBalance = useAgentStore((state) => state.setBondBalance);
   
-  const [copied, setCopied] = useState(false);
-
   useEffect(() => {
-    connectMockSocket();
-    return () => disconnectMockSocket();
-  }, []);
+    let isActive = true;
+
+    const bootstrap = async () => {
+      try {
+        const [transactions, bondStatus] = await Promise.all([
+          getTransactions(),
+          getBondStatus(),
+        ]);
+        if (!isActive) return;
+        setTransactions(transactions);
+        setBondBalance(bondStatus.balance);
+      } catch (error) {
+        console.error("Failed to bootstrap dashboard state", error);
+      }
+    };
+
+    bootstrap();
+    connectSocket();
+    return () => {
+      isActive = false;
+      disconnectSocket();
+    };
+  }, [setBondBalance, setTransactions]);
 
   const snippet = `curl -X POST https://api.agentindemnity.com/v1/chat \\
   -H "Authorization: Bearer sk-live-..." \\
@@ -29,9 +50,7 @@ export default function ComplianceDashboard() {
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(snippet);
-    setCopied(true);
     toast("Snippet copied to clipboard");
-    setTimeout(() => setCopied(false), 2000);
   };
 
   const totalTxs = Math.max(1, transactions.length);
@@ -113,11 +132,11 @@ export default function ComplianceDashboard() {
                 {[
                   { label: "General", key: "general", color: "bg-blue-500" },
                   { label: "Technical", key: "technical", color: "bg-amber-500" },
-                  { label: "Legal/Risk", key: "legal_risk", color: "bg-purple-500" },
-                  { label: "Fallback", key: "fallback_complex", color: "bg-neutral-500" },
+                  { label: "Legal/Risk", key: "legal", color: "bg-purple-500" },
+                  { label: "Fallback", key: "fallback", color: "bg-neutral-500" },
                 ].map((route) => {
                   const count = routeCounts[route.key] || 0;
-                  const pct = totalTxs > 0 ? (count / transactions.length) * 100 : 0;
+                  const pct = (count / totalTxs) * 100;
                   return (
                     <div key={route.key} className="space-y-1.5">
                       <div className="flex justify-between text-xs">
