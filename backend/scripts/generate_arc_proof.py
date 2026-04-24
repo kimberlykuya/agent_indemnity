@@ -12,6 +12,7 @@ import json
 import pathlib
 import sys
 import time
+from collections import Counter
 
 import httpx
 
@@ -20,6 +21,7 @@ LOGS_DIR = pathlib.Path(__file__).parent.parent / "logs"
 ARC_EXPLORER_TX_BASE = "https://testnet.arcscan.app/tx"
 SUBMISSION_EVIDENCE_JSON = LOGS_DIR / "submission_evidence.json"
 SUBMISSION_EVIDENCE_MD = LOGS_DIR / "submission_evidence.md"
+DEMO_TRANSACTIONS_JSON = LOGS_DIR / "demo_transactions.json"
 
 
 def _get_bond_status(client: httpx.Client) -> dict:
@@ -46,6 +48,48 @@ def _load_json(path: pathlib.Path, default: dict) -> dict:
         return json.loads(path.read_text())
     except (OSError, json.JSONDecodeError):
         return default
+
+
+def _summarize_transactions() -> dict:
+    transactions = _load_json(DEMO_TRANSACTIONS_JSON, [])
+    if not isinstance(transactions, list):
+        transactions = []
+
+    total_requests = len(transactions)
+    price_values = [float(tx.get("price_usdc", 0) or 0) for tx in transactions]
+    latency_values = [float(tx.get("latency_ms", 0) or 0) for tx in transactions]
+    route_counts = Counter(str(tx.get("route_category", "unknown")) for tx in transactions)
+    model_counts = Counter(str(tx.get("model_used", "unknown")) for tx in transactions)
+
+    price_min = min(price_values) if price_values else 0.0
+    price_max = max(price_values) if price_values else 0.0
+    price_avg = round(sum(price_values) / total_requests, 6) if total_requests else 0.0
+    total_volume = round(sum(price_values), 6)
+    avg_latency = int(round(sum(latency_values) / total_requests)) if total_requests else 0
+
+    pricing_economics = {
+        "average_price_usdc": price_avg,
+        "traditional_cost_low_usdc": 0.02,
+        "traditional_cost_high_usdc": 0.2,
+        "avg_margin_at_low_cost_usdc": round(price_avg - 0.02, 6),
+        "avg_margin_at_high_cost_usdc": round(price_avg - 0.2, 6),
+    }
+
+    return {
+        "stats": {
+            "total_requests": total_requests,
+            "settled_requests": sum(1 for tx in transactions if tx.get("payment_status") == "settled"),
+            "flagged_requests": sum(1 for tx in transactions if tx.get("anomaly_flagged")),
+            "price_min_usdc": price_min,
+            "price_max_usdc": price_max,
+            "price_avg_usdc": price_avg,
+            "total_volume_usdc": total_volume,
+            "avg_latency_ms": avg_latency,
+            "route_counts": dict(route_counts),
+            "model_counts": dict(model_counts),
+        },
+        "pricing_economics": pricing_economics,
+    }
 
 
 def _render_submission_evidence(evidence: dict) -> str:
@@ -118,12 +162,19 @@ def _sync_submission_evidence(arc_proof: dict) -> None:
             "pricing_economics": {},
         }
 
+    summary = _summarize_transactions()
     criteria = evidence.setdefault("criteria", {})
+    stats = evidence.setdefault("stats", {})
+    stats.update(summary["stats"])
+    evidence["pricing_economics"] = summary["pricing_economics"]
+    criteria.setdefault("per_action_pricing_leq_0_01", {})["pass"] = stats["price_max_usdc"] <= 0.01
+    criteria.setdefault("transaction_frequency_50_plus", {})["pass"] = stats["total_requests"] >= 50
     criteria.setdefault("onchain_slash_proof", {})["pass"] = bool(arc_proof.get("tx_hash"))
+    criteria.setdefault("traditional_cost_margin_gap", {})["pass"] = stats["price_avg_usdc"] <= summary["pricing_economics"]["traditional_cost_low_usdc"]
     slash_proof = evidence.setdefault("slash_proof", {})
     slash_proof["tx_hash"] = arc_proof.get("tx_hash")
     slash_proof["explorer_url"] = arc_proof.get("arc_explorer_url")
-    evidence["generated_at"] = arc_proof.get("timestamp")
+    evidence["generated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime())
 
     SUBMISSION_EVIDENCE_JSON.write_text(json.dumps(evidence, indent=2))
     SUBMISSION_EVIDENCE_MD.write_text(_render_submission_evidence(evidence))

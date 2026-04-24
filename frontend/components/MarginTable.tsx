@@ -1,8 +1,8 @@
 export function MarginTable() {
   const models = [
-    { name: "Mistral 7B (General)", route: "general", price: "$0.001", cost: "$0.0005", margin: "50%", desc: "Fast keyword matching" },
-    { name: "Mistral 7B (Technical)", route: "technical", price: "$0.003", cost: "$0.0015", margin: "50%", desc: "Code-aware prompt context" },
-    { name: "Mistral 7B (Legal)", route: "legal_risk", price: "$0.005", cost: "$0.0020", margin: "60%", desc: "Strict verification gates" },
+    { name: "Qwen3-0.6B (General)", route: "general", price: "$0.001", cost: "$0.0005", margin: "50%", desc: "Fast keyword matching" },
+    { name: "Qwen3-0.6B (Technical)", route: "technical", price: "$0.003", cost: "$0.0015", margin: "50%", desc: "Code-aware prompt context" },
+    { name: "Qwen3-0.6B (Legal)", route: "legal_risk", price: "$0.005", cost: "$0.0020", margin: "60%", desc: "Strict verification gates" },
     { name: "Gemini 3.1 Pro (Complex)", route: "fallback", price: "$0.010", cost: "$0.0075", margin: "25%", desc: "Full cognitive fallback" },
   ];
 

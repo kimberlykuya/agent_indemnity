@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-24T13:43:35.284964+00:00",
+  "generated_at": "2026-04-24T13:58:22+00:00",
   "inputs": {
     "transactions_path": "C:\\Users\\USER\\OneDrive - Strathmore University\\Documents\\agent_indemnity\\backend\\logs\\demo_transactions.json",
     "load_results_path": "C:\\Users\\USER\\OneDrive - Strathmore University\\Documents\\agent_indemnity\\backend\\logs\\load_test_results.json"
@@ -9,7 +9,7 @@
       "pass": true
     },
     "transaction_frequency_50_plus": {
-      "pass": false
+      "pass": true
     },
     "onchain_slash_proof": {
       "pass": true
@@ -19,23 +19,23 @@
     }
   },
   "stats": {
-    "total_requests": 41,
-    "settled_requests": 40,
-    "flagged_requests": 10,
+    "total_requests": 65,
+    "settled_requests": 65,
+    "flagged_requests": 15,
     "price_min_usdc": 0.001,
     "price_max_usdc": 0.01,
-    "price_avg_usdc": 0.003244,
-    "total_volume_usdc": 0.133,
-    "avg_latency_ms": 14164,
+    "price_avg_usdc": 0.003538,
+    "total_volume_usdc": 0.23,
+    "avg_latency_ms": 16754,
     "route_counts": {
-      "general": 19,
-      "technical": 8,
-      "legal_risk": 10,
-      "fallback_complex": 4
+      "general": 29,
+      "technical": 12,
+      "legal_risk": 15,
+      "fallback_complex": 9
     },
     "model_counts": {
-      "Qwen/Qwen3-0.6B": 37,
-      "gemini-3.1-pro-preview": 4
+      "Qwen/Qwen3-0.6B": 56,
+      "gemini-3.1-pro-preview": 9
     }
   },
   "slash_proof": {
@@ -43,10 +43,10 @@
     "explorer_url": "https://testnet.arcscan.app/tx/0x0167aa032667afcd988e6ea87b58f2d801fbb49a7c2889ca4838a923d163f292"
   },
   "pricing_economics": {
-    "average_price_usdc": 0.003244,
+    "average_price_usdc": 0.003538,
     "traditional_cost_low_usdc": 0.02,
     "traditional_cost_high_usdc": 0.2,
-    "avg_margin_at_low_cost_usdc": -0.016756,
-    "avg_margin_at_high_cost_usdc": -0.196756
+    "avg_margin_at_low_cost_usdc": -0.016462,
+    "avg_margin_at_high_cost_usdc": -0.196462
   }
 }

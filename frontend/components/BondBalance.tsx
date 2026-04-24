@@ -31,7 +31,7 @@ export function BondBalance() {
     }
   };
 
-  const isHealthy = balance > 5000;
+  const isHealthy = balance > 0.01;
 
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 flex flex-col justify-between h-[200px]">
@@ -59,7 +59,7 @@ export function BondBalance() {
         className="w-full mt-4 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-lg font-medium transition-colors focus:ring-2 ring-red-500/50 outline-none"
       >
         <ShieldAlert className="w-4 h-4" />
-        {isSlashing ? "Executing Manual Slash..." : "Manual Slash Bond ($500)"}
+        {isSlashing ? "Executing Manual Slash..." : "Manual Slash Bond"}
       </button>
     </div>
   );
