@@ -62,6 +62,10 @@ class ChatResponse(APIModel):
     bond_balance: float
     flagged: bool
     payment_ref: str
+    slash_executed: bool = False
+    slash_tx_hash: str | None = None
+    slash_payout: float | None = None
+    slash_victim_address: str | None = None
     timestamp: datetime
 
     @field_validator("reply", "model", "payment_ref")
@@ -73,6 +77,27 @@ class ChatResponse(APIModel):
     @classmethod
     def validate_amounts(cls, value: float, info) -> float:
         return _require_non_negative_finite(value, info.field_name)
+
+    @field_validator("slash_tx_hash")
+    @classmethod
+    def validate_optional_hash(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _require_non_empty(value, "slash_tx_hash")
+
+    @field_validator("slash_victim_address")
+    @classmethod
+    def validate_optional_victim_address(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _require_non_empty(value, "slash_victim_address")
+
+    @field_validator("slash_payout")
+    @classmethod
+    def validate_optional_payout(cls, value: float | None) -> float | None:
+        if value is None:
+            return None
+        return _require_non_negative_finite(value, "slash_payout")
 
 
 class SlashRequest(APIModel):

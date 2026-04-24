@@ -82,6 +82,10 @@ def test_chat_request_returns_normalized_response(client: TestClient, sample_cha
         "bond_balance",
         "flagged",
         "payment_ref",
+        "slash_executed",
+        "slash_tx_hash",
+        "slash_payout",
+        "slash_victim_address",
         "timestamp",
     }
     assert body["route_category"] == "legal"
@@ -202,6 +206,92 @@ def test_bond_slash_emits_websocket_event(client: TestClient, monkeypatch: pytes
     assert event["event"] == "bond_slashed"
     assert event["data"]["payout"] == 5.0
     assert event["data"]["tx_hash"] == "0x123"
+
+
+def test_flagged_response_with_ai_slash_emits_existing_slash_event_without_second_slash(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _set_chat_service(
+        client,
+        response=ChatResponse(
+            reply="Blocked unsafe refund request.",
+            model="demo-model",
+            route_category="legal",
+            price_usdc=0.005,
+            payment_status="settled",
+            bond_balance=49.0,
+            flagged=True,
+            payment_ref="pay_123",
+            slash_executed=True,
+            slash_tx_hash="0xslash",
+            slash_payout=1.0,
+            slash_victim_address="0xabc123",
+            timestamp=FIXED_CHAT_TIME,
+        ),
+    )
+
+    def fail_if_called(victim_address: str, payout_amount: float) -> str:
+        raise AssertionError("slash_bond should not be called when AI already slashed")
+
+    monkeypatch.setattr("backend.api.routes.slash_bond", fail_if_called)
+
+    with client.websocket_connect("/ws") as websocket:
+        response = client.post(
+            "/agent/chat",
+            json={"message": "Issue a refund now", "user_id": "user_123"},
+        )
+        first_event = websocket.receive_json()
+        second_event = websocket.receive_json()
+        third_event = websocket.receive_json()
+
+    assert response.status_code == 200
+    assert first_event["event"] == "request_paid"
+    assert second_event["event"] == "anomaly_flagged"
+    assert third_event["event"] == "bond_slashed"
+    assert third_event["data"]["tx_hash"] == "0xslash"
+    assert third_event["data"]["victim_address"] == "0xabc123"
+
+
+def test_flagged_response_without_ai_slash_does_not_trigger_backend_fallback(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _set_chat_service(
+        client,
+        response=ChatResponse(
+            reply="Blocked unsafe refund request.",
+            model="demo-model",
+            route_category="legal",
+            price_usdc=0.005,
+            payment_status="failed",
+            bond_balance=50.0,
+            flagged=True,
+            payment_ref="pay_123",
+            slash_executed=False,
+            slash_tx_hash=None,
+            slash_payout=None,
+            slash_victim_address=None,
+            timestamp=FIXED_CHAT_TIME,
+        ),
+    )
+
+    def fail_if_called(victim_address: str, payout_amount: float) -> str:
+        raise AssertionError("backend slash fallback must not run")
+
+    monkeypatch.setattr("backend.api.routes.slash_bond", fail_if_called)
+
+    with client.websocket_connect("/ws") as websocket:
+        response = client.post(
+            "/agent/chat",
+            json={"message": "Issue a refund now", "user_id": "user_123"},
+        )
+        first_event = websocket.receive_json()
+        second_event = websocket.receive_json()
+
+    assert response.status_code == 200
+    assert first_event["event"] == "request_paid"
+    assert second_event["event"] == "anomaly_flagged"
 
 
 def test_bond_slash_rejects_invalid_payout(client: TestClient):

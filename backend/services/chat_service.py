@@ -68,6 +68,10 @@ class ChatService:
                 bond_balance=bond_balance,
                 flagged=bool(raw.get("flagged", False)),
                 payment_ref=self._payment_ref(raw),
+                slash_executed=bool(raw.get("slash_executed", False)),
+                slash_tx_hash=raw.get("slash_tx_hash"),
+                slash_payout=raw.get("slash_payout"),
+                slash_victim_address=raw.get("slash_victim_address"),
                 timestamp=self._now_factory(),
             )
         except KeyError as exc:

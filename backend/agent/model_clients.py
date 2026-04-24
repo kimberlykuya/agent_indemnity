@@ -10,8 +10,10 @@ Rules:
 - All errors propagate up as ModelClientError.
 """
 
+import json
 import logging
 import time
+from typing import Any
 
 from openai import OpenAI, APIError, APITimeoutError
 
@@ -19,12 +21,61 @@ from google import genai
 from google.genai import types
 
 from agent import config
-from agent.prompts import FALLBACK_SYSTEM_PROMPT
+from agent.prompts import ACTION_CONTROLLER_SYSTEM_PROMPT, FALLBACK_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
 _FEATHERLESS_BASE = "https://api.featherless.ai/v1"
 _TIMEOUT_SECONDS  = 30
+
+_ACTION_TOOL = types.Tool(
+    functionDeclarations=[
+        types.FunctionDeclaration(
+            name="settle_premium",
+            description="Settle the per-request USDC premium for an agent action.",
+            parametersJsonSchema={
+                "type": "object",
+                "properties": {
+                    "amount_usdc": {
+                        "type": "number",
+                        "description": "USDC amount to settle for this request.",
+                    },
+                    "route_category": {
+                        "type": "string",
+                        "description": "Assigned route category for the request.",
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Short justification for settling the premium.",
+                    },
+                },
+                "required": ["amount_usdc", "route_category"],
+            },
+        ),
+        types.FunctionDeclaration(
+            name="slash_performance_bond",
+            description="Slash the agent performance bond and pay the affected party.",
+            parametersJsonSchema={
+                "type": "object",
+                "properties": {
+                    "victim_address": {
+                        "type": "string",
+                        "description": "Recipient wallet for the slash payout.",
+                    },
+                    "payout_amount_usdc": {
+                        "type": "number",
+                        "description": "USDC payout to release from the bond.",
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Short justification for the slash.",
+                    },
+                },
+                "required": ["victim_address", "payout_amount_usdc", "reason"],
+            },
+        ),
+    ]
+)
 
 
 class ModelClientError(Exception):
@@ -87,6 +138,53 @@ def _get_gemini() -> genai.Client:
     return _gemini_client
 
 
+def _coerce_function_args(args: Any) -> dict[str, Any]:
+    if isinstance(args, dict):
+        return args
+    if args is None:
+        return {}
+    if hasattr(args, "items"):
+        return dict(args.items())
+    if isinstance(args, str):
+        try:
+            parsed = json.loads(args)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _extract_function_calls(response: Any) -> list[dict[str, Any]]:
+    extracted: list[dict[str, Any]] = []
+
+    direct_calls = getattr(response, "function_calls", None)
+    if direct_calls:
+        for call in direct_calls:
+            extracted.append(
+                {
+                    "name": getattr(call, "name", "") or "",
+                    "args": _coerce_function_args(getattr(call, "args", None)),
+                }
+            )
+
+    if extracted:
+        return extracted
+
+    for candidate in getattr(response, "candidates", []) or []:
+        content = getattr(candidate, "content", None)
+        for part in getattr(content, "parts", []) or []:
+            function_call = getattr(part, "function_call", None)
+            if not function_call:
+                continue
+            extracted.append(
+                {
+                    "name": getattr(function_call, "name", "") or "",
+                    "args": _coerce_function_args(getattr(function_call, "args", None)),
+                }
+            )
+    return extracted
+
+
 def call_gemini_router(user_message: str, system_prompt: str) -> str:
     """Call Gemini Flash for routing classification. Returns raw response text."""
     client = _get_gemini()
@@ -128,3 +226,40 @@ def call_gemini_fallback(user_message: str) -> str:
         return response.text or ""
     except Exception as exc:
         raise ModelClientError(f"Gemini fallback error: {exc}") from exc
+
+
+def call_gemini_action_controller(context: dict[str, Any]) -> list[dict[str, Any]]:
+    """Call Gemini Flash as an orchestration layer and return function calls."""
+    client = _get_gemini()
+    t0 = time.monotonic()
+    try:
+        logger.info("Calling Gemini action controller model=%s", config.GEMINI_ACTION_MODEL)
+        response = client.models.generate_content(
+            model=config.GEMINI_ACTION_MODEL,
+            contents=json.dumps(context, ensure_ascii=True, indent=2),
+            config=types.GenerateContentConfig(
+                systemInstruction=ACTION_CONTROLLER_SYSTEM_PROMPT,
+                temperature=0,
+                tools=[_ACTION_TOOL],
+                toolConfig=types.ToolConfig(
+                    functionCallingConfig=types.FunctionCallingConfig(
+                        mode=types.FunctionCallingConfigMode.AUTO,
+                        allowedFunctionNames=[
+                            "settle_premium",
+                            "slash_performance_bond",
+                        ],
+                    )
+                ),
+            ),
+        )
+        latency = int((time.monotonic() - t0) * 1000)
+        calls = _extract_function_calls(response)
+        logger.info(
+            "Gemini action controller complete: model=%s latency_ms=%d function_calls=%d",
+            config.GEMINI_ACTION_MODEL,
+            latency,
+            len(calls),
+        )
+        return calls
+    except Exception as exc:
+        raise ModelClientError(f"Gemini action controller error: {exc}") from exc
