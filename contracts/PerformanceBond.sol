@@ -50,13 +50,12 @@ contract PerformanceBond {
         emit PremiumPaid(msg.sender, amount, bondBalance);
     }
 
-    function slashBond(address victim, uint256 payoutAmount) external onlyDeployer {
-        require(state == State.ACTIVE, "Already settled");
+    function slashBond(address victim, uint256 payoutAmount) external onlyDeployer onlyActive {
         require(payoutAmount <= bondBalance, "Insufficient bond");
         state = State.CLAIM_FILED;
         bondBalance -= payoutAmount;
         require(usdc.transfer(victim, payoutAmount), "transfer failed");
-        state = State.SETTLED;
+        state = State.ACTIVE;
         emit BondSlashed(victim, payoutAmount);
     }
 
