@@ -53,6 +53,9 @@ _ROUTE_CONFIG: dict[str, tuple[str, str]] = {
     config.TECHNICAL: (TECHNICAL_SYSTEM_PROMPT,  config.FEATHERLESS_TECH_MODEL),
     config.LEGAL_RISK:(LEGAL_RISK_SYSTEM_PROMPT, config.FEATHERLESS_LEGAL_MODEL),
 }
+_FLAGGED_REFUSAL_REPLY = (
+    "I'm sorry, I cannot process that request. This interaction has been flagged and reviewed."
+)
 
 
 def _env_positive_float(name: str, default: float) -> float:
@@ -306,6 +309,10 @@ def handle_request(message: str, user_id: str = "demo-user") -> dict:
 
     # 5. Anomaly detection
     anomaly = detect_anomaly(message, reply, route)
+    original_reply = reply
+
+    if anomaly["flagged"]:
+        reply = _FLAGGED_REFUSAL_REPLY
 
     slash_executed = False
     slash_tx_hash = None
@@ -316,7 +323,7 @@ def handle_request(message: str, user_id: str = "demo-user") -> dict:
         action_result = _run_ai_actions(
             user_id=user_id,
             message=message,
-            reply=reply,
+            reply=original_reply,
             route=route,
             price=price,
             flagged=anomaly["flagged"],
@@ -368,6 +375,8 @@ def handle_request(message: str, user_id: str = "demo-user") -> dict:
         "user_id":            user_id,
         "message":            message,
         "message_type":       "malicious" if anomaly["flagged"] else "normal",
+        "model_reply":        original_reply,
+        "returned_reply":     reply,
         "route_category":     route,
         "model_used":         model_id,
         "price_usdc":         price,

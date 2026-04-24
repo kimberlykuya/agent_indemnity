@@ -66,7 +66,7 @@ export function BondChart() {
               itemStyle={{ color: '#10b981' }}
               labelStyle={{ color: '#a3a3a3', marginBottom: '4px' }}
               labelFormatter={(_, payload) => payload?.[0]?.payload?.fullTime ?? ""}
-              formatter={(val: number) => [`$${val.toFixed(4)}`, 'Bond Balance']}
+              formatter={(val) => [`$${Number(val ?? 0).toFixed(4)}`, 'Bond Balance']}
             />
             <Area 
               type="stepAfter" 

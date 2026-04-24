@@ -42,6 +42,21 @@ Rather than traditional insurance, it acts as a **programmable performance bond*
 | On-chain | PerformanceBond.sol on Arc testnet |
 | Payments | Circle Gateway Nanopayments (x402) |
 
+## Why Circle Gateway + Arc (Not Stripe or Ethereum)
+
+| Rail | Effective cost per action | Viable at $0.001 charge? |
+|------|--------------------------|--------------------------|
+| Ethereum L1 (ERC-20 transfer) | $0.50–$5.00 | ✗ 500–5000× over charge |
+| Stripe API | $0.30 minimum | ✗ 300× over charge |
+| Arc direct on-chain tx | ~$0.005 | ✗ 5× over cheapest route |
+| **Circle Gateway Nanopayments** | **~$0.00005** | **✓ 20× under charge** |
+
+Circle Gateway batches thousands of sub-cent payment authorizations off-chain
+and settles them on Arc in bulk. That keeps the effective per-request cost
+around $0.00005, which is well below the cheapest $0.001 route charge and
+turns the unit economics from impossible on traditional rails into a viable
+economic loop.
+
 ## Auto Slash on Flagged Responses
 
 Flagged chat responses can trigger automatic on-chain slashing from the chat endpoint.

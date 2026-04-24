@@ -45,7 +45,7 @@ export function AgentChat() {
 
     try {
       const result = await sendChatMessage(userMsg);
-      setTransactionContext(result.payment_ref, {
+      setTransactionContext(result.payment_ref ?? "", {
         prompt: userMsg,
         reply: result.reply,
       });

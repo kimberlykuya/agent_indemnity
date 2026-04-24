@@ -76,7 +76,7 @@ export default function ComplianceDashboard() {
         }
 
         const result = await sendChatMessage(message, controller.signal);
-        setTransactionContext(result.payment_ref, {
+        setTransactionContext(result.payment_ref ?? "", {
           prompt: message,
           reply: result.reply,
         });
